@@ -1,118 +1,104 @@
+// loader.js — scene save/load for A2 (works on GitHub Pages)
+var CAMERAS = [];
+
 function download() {
+  if (!window.r) return;
 
-  // get all objects
-  ALL_OBJECTS = [];
+  var ALL_OBJECTS = [];
 
-  for (var i = 0; i<r.Ha.length; i++) {
-    // note: r.Ha are all objects in the scene
+  // NOTE: r.Ha is XTK's internal array of scene objects (matching course snippet)
+  for (var i = 0; i < r.Ha.length; i++) {
+    var obj = r.Ha[i];
+    if (!obj || !obj.visible) continue;
 
-    if (!r.Ha[i].visible)
-      continue;
+    var type    = obj.g;                  // class name as string (e.g., 'cube', 'sphere')
+    var color   = obj.color;
+    var matrix  = obj.transform.matrix;   // 4x4 matrix as Float32Array
+    var radius  = obj.radius;             // for spheres
+    var lengthX = obj.lengthX;            // for cubes
+    var lengthY = obj.lengthY;
+    var lengthZ = obj.lengthZ;
 
-    var type = r.Ha[i].g; // g is the type as string
-    var color = r.Ha[i].color;
-    var matrix = r.Ha[i].transform.matrix;
-    var radius = r.Ha[i].radius;
-    var lengthX = r.Ha[i].lengthX;
-    var lengthY = r.Ha[i].lengthY;
-    var lengthZ = r.Ha[i].lengthZ;
     ALL_OBJECTS.push([type, color, matrix, radius, lengthX, lengthY, lengthZ]);
-
   }
 
-
-  // create JSON object
   var out = {};
-  out['objects'] = ALL_OBJECTS;
-  if (typeof CAMERAS == 'undefined' || CAMERAS.length == 0) {
+  out.objects = ALL_OBJECTS;
+
+  if (typeof CAMERAS === 'undefined' || CAMERAS.length === 0) {
     CAMERAS = [r.camera.view];
   }
-  out['camera'] = CAMERAS; //r.camera.view;
+  out.camera = CAMERAS;
 
-  // from https://stackoverflow.com/a/30800715
+  // trigger a file download (scene.json)
   var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(out));
-
-  var downloadAnchorNode = document.createElement('a');
-  downloadAnchorNode.setAttribute("href",     dataStr);
-  downloadAnchorNode.setAttribute("download", "scene.json");
-  document.body.appendChild(downloadAnchorNode); // required for firefox
-  downloadAnchorNode.click();
-  downloadAnchorNode.remove();
-
+  var a = document.createElement('a');
+  a.setAttribute("href", dataStr);
+  a.setAttribute("download", "scene.json");
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 function upload(scene) {
+  if (!window.r) return;
 
-  // remove all objects in the scene
-  for (var obj in r.Ha) {
-
-    // r.remove(r.Ha[obj]);
-    r.Ha[obj].visible = false;
-
+  // hide all existing objects
+  for (var i = 0; i < r.Ha.length; i++) {
+    if (r.Ha[i]) r.Ha[i].visible = false;
   }
 
   var req = new XMLHttpRequest();
   req.responseType = 'json';
   req.open('GET', scene, true);
-  req.onload  = function() {
-    loaded = req.response;
 
-    // parse cubes
-    for (var obj in loaded['objects']) {
+  req.onload = function () {
+    var loaded = req.response;
+    if (!loaded) { alert('scene.json not found or invalid.'); return; }
 
-      obj = loaded['objects'][obj];
+    // restore objects
+    var objs = loaded.objects || [];
+    for (var k = 0; k < objs.length; k++) {
+      var objArr  = objs[k];   // [type, color, matrix, radius, lengthX, lengthY, lengthZ]
+      var type    = objArr[0];
+      var color   = objArr[1];
+      var matrix  = objArr[2];
+      var radius  = objArr[3];
+      var lengthX = objArr[4];
+      var lengthY = objArr[5];
+      var lengthZ = objArr[6];
 
-      // [type, color, matrix, radius, lengthX, lengthY, lengthZ]
+      if (type === 'cube') {
+        var c = new X.cube();
+        c.color = color;
+        c.transform.matrix = new Float32Array(Object.values(matrix));
+        if (lengthX) c.lengthX = lengthX;
+        if (lengthY) c.lengthY = lengthY;
+        if (lengthZ) c.lengthZ = lengthZ;
+        r.add(c);
 
-      type = obj[0];
-      color = obj[1];
-      matrix = obj[2];
-      radius = obj[3];
-      lengthX = obj[4];
-      lengthY = obj[5];
-      lengthZ = obj[6];
-
-      if (type == 'cube') {
-
-        loaded_cube = new X.cube();
-        loaded_cube.color = color;
-        loaded_cube.transform.matrix = new Float32Array(Object.values(matrix));
-        loaded_cube.lengthX = lengthX;
-        loaded_cube.lengthY = lengthY;
-        loaded_cube.lengthZ = lengthZ;
-
-        r.add(loaded_cube);
-
-      } else if (type == 'sphere') {
-        
-        loaded_sphere = new X.sphere();
-        loaded_sphere.color = color;
-        loaded_sphere.transform.matrix = new Float32Array(Object.values(matrix));
-        loaded_sphere.radius = radius;
-
-        r.add(loaded_sphere);
+      } else if (type === 'sphere') {
+        var s = new X.sphere();
+        s.color = color;
+        s.transform.matrix = new Float32Array(Object.values(matrix));
+        if (radius) s.radius = radius;
+        r.add(s);
       }
-
-
-
-
     }
 
-    // restore camera
-    r.camera.view = new Float32Array(Object.values(loaded['camera'][0]));
-
-    CAMERAS = [];
-    for (var cam in loaded['camera']) {
-
-      cam = loaded['camera'][cam];
-      CAMERAS.push(new Float32Array(Object.values(cam)));
-
+    // restore camera views
+    if (loaded.camera && loaded.camera.length) {
+      r.camera.view = new Float32Array(Object.values(loaded.camera[0]));
+      CAMERAS = [];
+      for (var j = 0; j < loaded.camera.length; j++) {
+        CAMERAS.push(new Float32Array(Object.values(loaded.camera[j])));
+      }
     }
-
-
-
   };
-  req.send(null);
-  
-}
 
+  req.onerror = function () {
+    alert('Could not fetch ' + scene + '. Did you copy it into cs460/02/ and push?');
+  };
+
+  req.send(null);
+}
