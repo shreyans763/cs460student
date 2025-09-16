@@ -37,9 +37,9 @@
       r.init();
 
       // ===== Part 2: many cubes (11 x 11 x 11 = 1331) =====
-      for (var z = -5; z < 6; z++) {
-        for (var y = -5; y < 6; y++) {
-          for (var x = -5; x < 6; x++) {
+      for (var z = -5; z <= 5; z++) {
+        for (var y = -5; y <= 5; y++) {
+          for (var x = -5; x <= 5; x++) {
             var cube = new X.cube();
             cube.transform.translateX((SIZE + GAP) * x);
             cube.transform.translateY((SIZE + GAP) * y);
@@ -60,7 +60,7 @@
       // ===== Part 4: picking on mouse move =====
       r.interactor.onMouseMove = function (e) {
         var id = r.pick(e.offsetX, e.offsetY);
-        SELECTED_CUBE = id ? r.get(id) : null;
+        SELECTED_CUBE = (id !== 0) ? r.get(id) : null;
       };
 
       // ===== Part 5: key controls =====
