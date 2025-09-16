@@ -16,8 +16,8 @@
   <header>
     <h1>Assignment 2 – XTK Cube Art</h1>
     <div class="help">
-      Hover a cube to select it. Keys: <kbd>Q</kbd> hide, <kbd>W</kbd> color, <kbd>E</kbd> rotateX 10°, 
-      <kbd>B</kbd> toggle camera spin, <kbd>O</kbd> download scene, <kbd>L</kbd> load <code>scene.json</code>.
+      Hover a cube to select it. Keys: <kbd>Q</kbd> hide, <kbd>W</kbd> color, <kbd>E</kbd> rotateX 10°,
+      <kbd>B</kbd> spin camera, <kbd>O</kbd> download scene, <kbd>L</kbd> load <code>scene.json</code>.
     </div>
   </header>
 
@@ -26,58 +26,40 @@
   <script src="xtk.js"></script>
   <script src="loader.js"></script>
   <script>
-    // ====== Globals ======
-    var r;                    // X.renderer3D
-    var SELECTED_CUBE = null; // currently hovered cube
-    var SPIN = false;         // camera spin toggle
-
-    // Grid spacing
-    const SIZE = 6, GAP = 2;
+    var r, SELECTED_CUBE=null, SPIN=false;
+    const SIZE=6, GAP=2;
 
     window.onload = function () {
-      // renderer
       r = new X.renderer3D();
       r.container = 'r';
       r.init();
 
-      // grid of cubes: 11 x 11 x 11 = 1331 cubes
-      for (var z = -5; z < 6; z++) {
-        for (var y = -5; y < 6; y++) {
-          for (var x = -5; x < 6; x++) {
-            var cube = new X.cube();
-            cube.transform.translateX((SIZE + GAP) * x);
-            cube.transform.translateY((SIZE + GAP) * y);
-            cube.transform.translateZ((SIZE + GAP) * z);
-            r.add(cube);
-          }
-        }
+      // 11x11x11 = 1331 cubes
+      for (var z=-5; z<6; z++) for (var y=-5; y<6; y++) for (var x=-5; x<6; x++) {
+        var cube = new X.cube();
+        cube.transform.translateX((SIZE+GAP)*x);
+        cube.transform.translateY((SIZE+GAP)*y);
+        cube.transform.translateZ((SIZE+GAP)*z);
+        r.add(cube);
       }
 
-      // camera
-      r.camera.position = [0, 0, 300];
+      r.camera.position = [0,0,300];
+      r.onRender = function(){ if (SPIN) r.camera.rotate([1,0]); };
 
-      // optional spin
-      r.onRender = function () { if (SPIN) r.camera.rotate([1, 0]); };
-
-      // picking
-      r.interactor.onMouseMove = function (event) {
-        var id = r.pick(event.offsetX, event.offsetY);
+      r.interactor.onMouseMove = function (e) {
+        var id = r.pick(e.offsetX, e.offsetY);
         SELECTED_CUBE = id ? r.get(id) : null;
       };
 
-      // keyboard
-      window.onkeypress = function (e) {
+      window.onkeypress = function(e){
         const k = e.key.toLowerCase();
-
-        if (k === 'b') { SPIN = !SPIN; return; }
-        if (k === 'o' && typeof download === 'function') { download(); return; }
-        if (k === 'l' && typeof upload   === 'function') { upload('scene.json'); return; }
-
+        if (k==='b') { SPIN=!SPIN; return; }
+        if (k==='o' && typeof download==='function') { download(); return; }
+        if (k==='l' && typeof upload==='function')   { upload('scene.json'); return; }
         if (!SELECTED_CUBE) return;
-
-        if (k === 'q')      SELECTED_CUBE.visible = false;
-        else if (k === 'w') SELECTED_CUBE.color = [Math.random(), Math.random(), Math.random()];
-        else if (k === 'e') SELECTED_CUBE.transform.rotateX(10);
+        if (k==='q') SELECTED_CUBE.visible=false;
+        else if (k==='w') SELECTED_CUBE.color=[Math.random(),Math.random(),Math.random()];
+        else if (k==='e') SELECTED_CUBE.transform.rotateX(10);
       };
 
       r.render();
