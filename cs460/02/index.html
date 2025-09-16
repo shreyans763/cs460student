@@ -2,27 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>CS460 – A2 (XTK minimal)</title>
+  <title>CS460 – A2: 3D Art with XTK</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    html,body {margin:0;height:100%;background:#000;color:#fff;font:16px system-ui}
-    #r {width:100vw;height:100vh}
+    html, body { margin:0; height:100%; background:#000; color:#fff; font:16px system-ui, Arial; }
+    header { text-align:center; padding:10px 0; }
+    #r { width:100vw; height:72vh; display:block; }
+    .help { max-width:900px; margin:8px auto; padding:0 12px; line-height:1.4 }
+    kbd { padding:2px 6px; border:1px solid #888; border-bottom-width:2px; border-radius:4px; background:#111; }
   </style>
 </head>
 <body>
+  <header>
+    <h1>Assignment 2 – XTK Cube Art</h1>
+    <div class="help">
+      Hover a cube to select it. Keys: <kbd>Q</kbd> hide, <kbd>W</kbd> color, <kbd>E</kbd> rotateX 10°, 
+      <kbd>B</kbd> toggle camera spin, <kbd>O</kbd> download scene, <kbd>L</kbd> load <code>scene.json</code>.
+    </div>
+  </header>
+
   <div id="r"></div>
+
   <script src="xtk.js"></script>
+  <script src="loader.js"></script>
   <script>
-    var r;
-    window.onload = function() {
+    // ====== Globals ======
+    var r;                    // X.renderer3D
+    var SELECTED_CUBE = null; // currently hovered cube
+    var SPIN = false;         // camera spin toggle
+
+    // Grid spacing
+    const SIZE = 6, GAP = 2;
+
+    window.onload = function () {
+      // renderer
       r = new X.renderer3D();
       r.container = 'r';
       r.init();
 
-      var cube = new X.cube();
-      r.add(cube);
+      // grid of cubes: 11 x 11 x 11 = 1331 cubes
+      for (var z = -5; z < 6; z++) {
+        for (var y = -5; y < 6; y++) {
+          for (var x = -5; x < 6; x++) {
+            var cube = new X.cube();
+            cube.transform.translateX((SIZE + GAP) * x);
+            cube.transform.translateY((SIZE + GAP) * y);
+            cube.transform.translateZ((SIZE + GAP) * z);
+            r.add(cube);
+          }
+        }
+      }
 
-      r.camera.position = [0,0,150];
+      // camera
+      r.camera.position = [0, 0, 300];
+
+      // optional spin
+      r.onRender = function () { if (SPIN) r.camera.rotate([1, 0]); };
+
+      // picking
+      r.interactor.onMouseMove = function (event) {
+        var id = r.pick(event.offsetX, event.offsetY);
+        SELECTED_CUBE = id ? r.get(id) : null;
+      };
+
+      // keyboard
+      window.onkeypress = function (e) {
+        const k = e.key.toLowerCase();
+
+        if (k === 'b') { SPIN = !SPIN; return; }
+        if (k === 'o' && typeof download === 'function') { download(); return; }
+        if (k === 'l' && typeof upload   === 'function') { upload('scene.json'); return; }
+
+        if (!SELECTED_CUBE) return;
+
+        if (k === 'q')      SELECTED_CUBE.visible = false;
+        else if (k === 'w') SELECTED_CUBE.color = [Math.random(), Math.random(), Math.random()];
+        else if (k === 'e') SELECTED_CUBE.transform.rotateX(10);
+      };
+
       r.render();
     };
   </script>
