@@ -20,87 +20,39 @@
       <kbd>B</kbd> toggle camera spin, <kbd>O</kbd> download scene, <kbd>L</kbd> load <code>scene.json</code>.
     </div>
   </header>
-
   <div id="r"></div>
-
   <script src="xtk.js"></script>
   <script src="loader.js"></script>
   <script>
-    // ===== Global state =====
-    var r, SELECTED_CUBE = null, SPIN = false;
-
-    // Proper size & spacing so cubes don't overlap
-    const SIZE = 12;   // cube edge length (pixels)
-    const GAP  = 4;    // empty space between cubes
-    const STEP = SIZE + GAP;
-
-    window.onload = function () {
-      // ------- Part 1: renderer -------
-      r = new X.renderer3D();
-      r.container = 'r';
-      r.init();
-
-      // ------- Part 2: many cubes (11 x 11 x 11 = 1331) -------
-      for (var z = -5; z <= 5; z++) {
-        for (var y = -5; y <= 5; y++) {
-          for (var x = -5; x <= 5; x++) {
-            var cube = new X.cube();
-
-            // size each cube explicitly
-            cube.lengthX = SIZE;
-            cube.lengthY = SIZE;
-            cube.lengthZ = SIZE;
-
-            // place on grid
-            cube.transform.translateX(STEP * x);
-            cube.transform.translateY(STEP * y);
-            cube.transform.translateZ(STEP * z);
-
-            // subtle gradient to see depth (optional but helpful)
-            cube.color = [ (x+5)/10, (y+5)/10, (z+5)/10 ];
-
-            r.add(cube);
-          }
-        }
+    var r, SELECTED_CUBE=null, SPIN=false;
+    const SIZE=12, GAP=4, STEP=SIZE+GAP;
+    window.onload=function(){
+      r=new X.renderer3D(); r.container='r'; r.init();
+      for(var z=-5;z<=5;z++)for(var y=-5;y<=5;y++)for(var x=-5;x<=5;x++){
+        var c=new X.cube();
+        c.lengthX=SIZE; c.lengthY=SIZE; c.lengthZ=SIZE;
+        c.transform.translateX(STEP*x);
+        c.transform.translateY(STEP*y);
+        c.transform.translateZ(STEP*z);
+        c.color=[(x+5)/10,(y+5)/10,(z+5)/10];
+        r.add(c);
       }
-
-      // ------- Part 3: camera -------
-      // Spec asks 0,0,300 — keep it exactly to match rubric.
-      r.camera.position = [0, 0, 300];
-
-      // ------- Part 6: spin camera when SPIN=true -------
-      r.onRender = function () {
-        if (SPIN) r.camera.rotate([1, 0]); // 1 degree each frame around X
+      r.camera.position=[0,0,300];
+      r.onRender=function(){ if(SPIN) r.camera.rotate([1,0]); };
+      r.interactor.onMouseMove=function(e){
+        var id=r.pick(e.offsetX,e.offsetY);
+        SELECTED_CUBE=(id!==0)?r.get(id):null;
       };
-
-      // ------- Part 4: picking (hover to select) -------
-      r.interactor.onMouseMove = function (e) {
-        var id = r.pick(e.offsetX, e.offsetY);
-        // XTK returns 0 when nothing is hit
-        SELECTED_CUBE = (id !== 0) ? r.get(id) : null;
+      window.onkeypress=function(e){
+        const k=e.key.toLowerCase();
+        if(k==='b'){ SPIN=!SPIN; return; }
+        if(k==='o' && typeof download==='function'){ download(); return; }
+        if(k==='l' && typeof upload==='function'){ upload('scene.json'); return; }
+        if(!SELECTED_CUBE) return;
+        if(k==='q') SELECTED_CUBE.visible=false;
+        else if(k==='w') SELECTED_CUBE.color=[Math.random(),Math.random(),Math.random()];
+        else if(k==='e') SELECTED_CUBE.transform.rotateX(10);
       };
-
-      // ------- Part 5: Q/W/E + B/O/L controls -------
-      window.onkeypress = function (e) {
-        const k = e.key.toLowerCase();
-
-        // global actions (no selection needed)
-        if (k === 'b') { SPIN = !SPIN; return; }
-        if (k === 'o' && typeof download === 'function') { download(); return; }
-        if (k === 'l' && typeof upload   === 'function') { upload('scene.json'); return; }
-
-        // edits need a selected cube
-        if (!SELECTED_CUBE) return;
-
-        if (k === 'q') {
-          SELECTED_CUBE.visible = false;  // hide
-        } else if (k === 'w') {
-          SELECTED_CUBE.color = [Math.random(), Math.random(), Math.random()]; // random color
-        } else if (k === 'e') {
-          SELECTED_CUBE.transform.rotateX(10); // rotate X by 10°
-        }
-      };
-
       r.render();
     };
   </script>
