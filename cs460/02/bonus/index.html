@@ -90,12 +90,11 @@
         if (k === 'o' && typeof download === 'function') {
           download();
         }
-
-        // change this in the key handler for 'l'
-if (k === 'l' && typeof upload === 'function') {
-  upload('scene.json');   // not ../scene.json anymore
-  return;
-}
+        
+        if (k === 'l' && typeof upload === 'function') {
+        upload('scene.json');   
+        return;
+        }
 
       });
     };
