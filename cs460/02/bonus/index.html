@@ -91,10 +91,12 @@
           download();
         }
 
-        if (k === 'l' && typeof upload === 'function') {
-          // IMPORTANT: load the scene.json from the parent folder
-          upload('../scene.json');
-        }
+        // change this in the key handler for 'l'
+if (k === 'l' && typeof upload === 'function') {
+  upload('scene.json');   // not ../scene.json anymore
+  return;
+}
+
       });
     };
   </script>
