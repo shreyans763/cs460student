@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CS460 – A2 Bonus: Spheres + Camera Cycle</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html,body{margin:0;height:100%;background:#000;color:#fff;font:16px system-ui}
+    header{text-align:center;padding:12px 0}
+    #r{width:100vw;height:72vh;display:block}
+    kbd{padding:2px 6px;border:1px solid #888;border-bottom-width:2px;border-radius:4px;background:#111}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>A2 Bonus – Spheres + Camera Cycle</h1>
+    <div>Keys: <kbd>C</kbd> save camera, <kbd>V</kbd> play/stop camera tour,
+      <kbd>O</kbd> download scene, <kbd>L</kbd> load <code>scene.json</code></div>
+  </header>
+  <div id="r"></div>
+
+  <!-- reuse libs from the parent folder -->
+  <script src="../xtk.js"></script>
+  <script src="../loader.js"></script>
+  <script>
+    var r, CAMERAS = [], tour = null, tourIndex = 0;
+    const SIZE = 6, GAP = 2;
+
+    window.onload = function () {
+      r = new X.renderer3D(); r.container = 'r'; r.init();
+
+      // Spheres with random sizes/colors (11×11×11)
+      for (var z=-5; z<=5; z++) {
+        for (var y=-5; y<=5; y++) {
+          for (var x=-5; x<=5; x++) {
+            var s = new X.sphere();
+            s.radius = 2 + Math.random()*4;
+            s.color = [Math.random(), Math.random(), Math.random()];
+            s.transform.translateX((SIZE+GAP)*x);
+            s.transform.translateY((SIZE+GAP)*y);
+            s.transform.translateZ((SIZE+GAP)*z);
+            r.add(s);
+          }
+        }
+      }
+
+      r.camera.position = [0,0,380];
+      r.render();
+
+      window.onkeypress = function(e){
+        const k = e.key.toLowerCase();
+
+        if (k === 'c') {
+          CAMERAS.push(new Float32Array(r.camera.view)); // save current view
+        }
+
+        if (k === 'v') {
+          if (tour) { clearInterval(tour); tour = null; return; }
+          if (!CAMERAS.length) return;
+          tourIndex = 0;
+          tour = setInterval(function(){
+            r.camera.view = new Float32Array(CAMERAS[tourIndex]);
+            tourIndex = (tourIndex + 1) % CAMERAS.length;
+          }, 1000);
+        }
+
+        if (k === 'o' && typeof download === 'function') download();
+        if (k === 'l' && typeof upload === 'function') upload('scene.json');
+      };
+    };
+  </script>
+</body>
+</html>
