@@ -9,22 +9,39 @@
     header{text-align:center;padding:12px 0}
     #r{width:100vw;height:72vh;display:block}
     kbd{padding:2px 6px;border:1px solid #888;border-bottom-width:2px;border-radius:4px;background:#111}
+    #hud{position:fixed;left:12px;bottom:12px;background:rgba(0,0,0,.6);border:1px solid #333;border-radius:8px;padding:8px 10px;font-size:13px}
   </style>
 </head>
 <body>
   <header>
     <h1>A2 Bonus – Spheres + Camera Cycle</h1>
-    <div>Keys: <kbd>C</kbd> save camera, <kbd>V</kbd> play/stop camera tour,
-      <kbd>O</kbd> download scene, <kbd>L</kbd> load <code>scene.json</code></div>
+    <div>Keys:
+      <kbd>C</kbd> save camera,
+      <kbd>V</kbd> play/stop camera tour,
+      <kbd>O</kbd> download scene,
+      <kbd>L</kbd> load <code>scene.json</code> (from parent folder).
+    </div>
   </header>
-  <div id="r"></div>
+  <div id="r" tabindex="0"></div>
+  <div id="hud">cams: <span id="cams">0</span> • tour: <span id="tour">off</span></div>
 
   <!-- reuse libs from the parent folder -->
   <script src="../xtk.js"></script>
   <script src="../loader.js"></script>
   <script>
-    var r, CAMERAS = [], tour = null, tourIndex = 0;
+    // Use the same global names loader.js expects:
+    var r;
+    // Let loader.js also see/modify CAMERAS if needed
+    window.CAMERAS = window.CAMERAS || [];
+
+    var tourTimer = null, tourIndex = 0;
+
     const SIZE = 6, GAP = 2;
+
+    function updateHUD(){
+      document.getElementById('cams').textContent = window.CAMERAS.length;
+      document.getElementById('tour').textContent = tourTimer ? 'on' : 'off';
+    }
 
     window.onload = function () {
       r = new X.renderer3D(); r.container = 'r'; r.init();
@@ -46,27 +63,39 @@
 
       r.camera.position = [0,0,380];
       r.render();
+      updateHUD();
 
-      window.onkeypress = function(e){
+      // More reliable than keypress across browsers
+      window.addEventListener('keydown', function(e){
         const k = e.key.toLowerCase();
 
         if (k === 'c') {
-          CAMERAS.push(new Float32Array(r.camera.view)); // save current view
+          // save current camera pose
+          window.CAMERAS.push(new Float32Array(r.camera.view));
+          updateHUD();
         }
 
         if (k === 'v') {
-          if (tour) { clearInterval(tour); tour = null; return; }
-          if (!CAMERAS.length) return;
+          // toggle the tour
+          if (tourTimer) { clearInterval(tourTimer); tourTimer = null; updateHUD(); return; }
+          if (!window.CAMERAS.length) return;
           tourIndex = 0;
-          tour = setInterval(function(){
-            r.camera.view = new Float32Array(CAMERAS[tourIndex]);
-            tourIndex = (tourIndex + 1) % CAMERAS.length;
+          tourTimer = setInterval(function(){
+            r.camera.view = new Float32Array(window.CAMERAS[tourIndex]);
+            tourIndex = (tourIndex + 1) % window.CAMERAS.length;
           }, 1000);
+          updateHUD();
         }
 
-        if (k === 'o' && typeof download === 'function') download();
-        if (k === 'l' && typeof upload === 'function') upload('scene.json');
-      };
+        if (k === 'o' && typeof download === 'function') {
+          download();
+        }
+
+        if (k === 'l' && typeof upload === 'function') {
+          // IMPORTANT: load the scene.json from the parent folder
+          upload('../scene.json');
+        }
+      });
     };
   </script>
 </body>
