@@ -15,11 +15,11 @@
 <body>
   <header>
     <h1>A3 – Final (Flicker + Wireframe)</h1>
-    <div class="hint">SHIFT+mouse-down to place; drag up/down to scale (color flips on sign). Keys: <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe.</div>
+    <div class="hint">SHIFT + press trackpad to place. Drag finger up/down to scale (color flips on sign). Keys: <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe.</div>
   </header>
   <div id="app"></div>
 
-  <!-- three.js + controls from CDN -->
+  <!-- three.js + controls -->
   <script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three@0.161.0/examples/js/controls/OrbitControls.js"></script>
 
@@ -28,9 +28,10 @@
     const el = document.getElementById('app');
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, el.clientWidth/el.clientHeight, 0.1, 1000);
-    camera.position.set(0, 0, 10);
+    camera.position.set(0, 0, 8);
 
     const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setClearColor(0x000000, 1);
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.setSize(el.clientWidth, el.clientHeight);
     el.appendChild(renderer.domElement);
@@ -39,36 +40,35 @@
     controls.enableDamping = true;
 
     // lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     const dir = new THREE.DirectionalLight(0xffffff, 1.0);
     dir.position.set(5, 8, 6);
     scene.add(dir);
 
-    // helpers (invisible plane we raycast against at z=0)
+    // helpers to place under the cursor on z=0
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const placePlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0); // z=0 plane
 
-    // state
-    const meshes = [];   // all created meshes
-    let placing = null;  // { mesh, startY }
-    let FLICKER = false;
-    let WIREFRAME = false;
-
-    // utility: world point under mouse on z=0 plane
     function worldPointFromEvent(e){
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
       const p = new THREE.Vector3();
-      raycaster.ray.intersectPlane(placePlane, p);
-      return p;
+      const ok = raycaster.ray.intersectPlane(placePlane, p);
+      return ok ? p : null;
     }
 
-    // create a torus-knot at pos with uniform scale s
+    // state
+    const meshes = [];
+    let placing = null; // { mesh, startY }
+    let FLICKER = false;
+    let WIREFRAME = false;
+
+    // shape factory (torus knot so it’s obvious)
     function addTorusKnot(pos, s=1){
-      const geo = new THREE.TorusKnotGeometry(0.5, 0.18, 128, 20);
+      const geo = new THREE.TorusKnotGeometry(0.8, 0.22, 160, 24);
       const mat = new THREE.MeshStandardMaterial({ color: 0xff00aa, metalness: 0.2, roughness: 0.35, emissive: 0x000000 });
       mat.wireframe = WIREFRAME;
       const m = new THREE.Mesh(geo, mat);
@@ -79,35 +79,38 @@
       return m;
     }
 
-    // ---- show ONE default shape so the page never looks empty ----
-    addTorusKnot(new THREE.Vector3(0,0,0), 1.4);
+    // ---- ALWAYS show one default shape so page is never blank ----
+    const defaultMesh = addTorusKnot(new THREE.Vector3(0,0,0), 1.5);
 
-    // interactions
+    // Trackpad placement: SHIFT + press/hold = start; drag up/down to scale; release to place
     renderer.domElement.addEventListener('pointerdown', (e)=>{
-      if (!e.shiftKey) return;          // placement requires SHIFT
-      const p = worldPointFromEvent(e) || new THREE.Vector3();
+      if (!e.shiftKey) return;
+      const p = worldPointFromEvent(e) || new THREE.Vector3(0,0,0);
       const m = addTorusKnot(p, 1);
       placing = { mesh: m, startY: e.clientY };
     });
 
     renderer.domElement.addEventListener('pointermove', (e)=>{
       if (!placing) return;
-      const dy = e.clientY - placing.startY;     // drag up/down
-      let s = 1 + (-dy / 100);                   // up = bigger
+      const dy = e.clientY - placing.startY;      // drag up = bigger, down = negative (color flips)
+      let s = 1 + (-dy / 120);
       const mat = placing.mesh.material;
-      if (s >= 0){
-        mat.color.set('#ff00aa');
-      } else {
-        mat.color.set('#00ff88');
-      }
+      if (s >= 0) mat.color.set('#ff00aa'); else mat.color.set('#00ff88');
       placing.mesh.scale.setScalar(Math.max(0.1, Math.abs(s)));
-      // also keep it under cursor while dragging
+
       const p = worldPointFromEvent(e);
       if (p) placing.mesh.position.copy(p);
     });
 
     window.addEventListener('pointerup', ()=>{
       placing = null;
+    });
+
+    // Fallback for “tap to click” users: Shift + click once to drop a shape where the cursor is.
+    renderer.domElement.addEventListener('click', (e)=>{
+      if (!e.shiftKey || placing) return; // if you were holding already, ignore
+      const p = worldPointFromEvent(e) || new THREE.Vector3(0,0,0);
+      addTorusKnot(p, 1);
     });
 
     // keyboard
@@ -131,11 +134,18 @@
       renderer.setSize(w, h);
     });
 
-    // loop
+    // animate (spin the default a bit so you see motion)
     const clock = new THREE.Clock();
     (function animate(){
       requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
+
+      // gentle spin so the default shape is clearly visible
+      if (defaultMesh){
+        defaultMesh.rotation.y = t * 0.4;
+        defaultMesh.rotation.x = t * 0.2;
+      }
+
       if (FLICKER){
         const pulse = 0.5 + 0.5*Math.sin(t*6);
         meshes.forEach(m => { m.material.emissive = new THREE.Color(0xffffff); m.material.emissiveIntensity = pulse; });
