@@ -7,7 +7,8 @@
   <style>
     html,body{margin:0;height:100%;background:#000;color:#fff;font:16px system-ui,Arial}
     header{ text-align:center; padding:14px 0 }
-    #app{ position:fixed; inset:0; top:96px } /* leave room for header */
+    /* canvas container sits below header — top is set dynamically in JS */
+    #app{ position:fixed; inset:0; top:0 }
     kbd{ padding:2px 6px; border:1px solid #888; border-bottom-width:2px; border-radius:4px; background:#111 }
     .hint{opacity:.9;text-align:center;margin-top:6px}
     .hud{ position:fixed; left:10px; bottom:10px; background:#111b; border:1px solid #333; border-radius:8px; padding:8px 10px; font-size:13px }
@@ -15,10 +16,10 @@
   </style>
 </head>
 <body>
-  <header>
+  <header id="pageHeader">
     <h1>A3 – Final (Flicker + Wireframe)</h1>
     <div class="hint">
-      <strong>Place/scale:</strong> hold <kbd>Shift</kbd> and press/hold trackpad, drag up/down to scale (color flips by sign).
+      <strong>Place/scale:</strong> hold <kbd>Shift</kbd> and press/hold trackpad, drag up/down to scale (color flips by sign).  
       <strong>Keys:</strong> <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe, <kbd>P</kbd> pattern on/off (green/pink),
       <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> shape (cube/sphere/torus), <kbd>R</kbd> reset.
       <br><small>(Tip: Shift + single click also drops a shape.)</small>
@@ -35,11 +36,11 @@
   <script>
   (function(){
     const root = document.getElementById('app');
+    const header = document.getElementById('pageHeader');
     const hud  = document.getElementById('hud');
     const err  = document.getElementById('err');
 
     function showErr(msg){ console.error(msg); err.textContent=msg; err.style.display='block'; }
-
     if (!window.THREE){ showErr('Three.js failed to load (network/CDN blocked).'); return; }
 
     // Scene
@@ -52,15 +53,18 @@
     let renderer;
     try{ renderer = new THREE.WebGLRenderer({antialias:true}); }
     catch(e){ showErr('Could not create WebGLRenderer: '+e.message); return; }
-
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
     root.appendChild(renderer.domElement);
 
-    function resize(){
-      const w=root.clientWidth, h=Math.max(1, root.clientHeight);
-      camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h,false);
+    // Layout: place canvas below actual header height
+    function layout(){
+      root.style.top = header.offsetHeight + 'px';
+      const w = root.clientWidth, h = Math.max(1, root.clientHeight);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
     }
-    resize(); window.addEventListener('resize', resize);
+    window.addEventListener('resize', layout);
+    layout();
 
     // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 0.65));
@@ -88,7 +92,7 @@
     }
 
     // Shapes
-    let SHAPE_MODE='torus'; // 'cube' | 'sphere' | 'torus'
+    let SHAPE_MODE='torus';
     function geometryFor(){
       if (SHAPE_MODE==='cube')   return new THREE.BoxGeometry(1.4,1.4,1.4,2,2,2);
       if (SHAPE_MODE==='sphere') return new THREE.SphereGeometry(0.9,36,24);
@@ -107,9 +111,9 @@
     }
 
     // Default: one centered torus
-    const defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.6, +1);
+    const defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.4, +1);
 
-    // Placement
+    // Placement helpers
     const plane=new THREE.Plane(new THREE.Vector3(0,0,1),0);
     const ray=new THREE.Raycaster(); const ndc=new THREE.Vector2();
     function toPlane(e){
@@ -155,7 +159,7 @@
       else if(k==='1'){ SHAPE_MODE='cube';  updateHUD(); }
       else if(k==='2'){ SHAPE_MODE='sphere';updateHUD(); }
       else if(k==='3'){ SHAPE_MODE='torus'; updateHUD(); }
-      else if(k==='r'){ meshes.forEach(m=>scene.remove(m)); meshes.length=0; addShape(new THREE.Vector3(0,0,0),1.6,+1); updateHUD(); }
+      else if(k==='r'){ meshes.forEach(m=>scene.remove(m)); meshes.length=0; addShape(new THREE.Vector3(0,0,0),1.4,+1); updateHUD(); }
     });
 
     // Animate
