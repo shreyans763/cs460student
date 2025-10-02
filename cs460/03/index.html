@@ -7,8 +7,7 @@
   <style>
     html,body{margin:0;height:100%;background:#000;color:#fff;font:16px system-ui,Arial}
     header{ text-align:center; padding:16px 0 6px }
-    /* leave room for header text */
-    #app{ position:fixed; inset:0; top:100px }
+    #app{ position:fixed; inset:0; top:110px } /* leave room for header text */
     kbd{ padding:2px 6px; border:1px solid #888; border-bottom-width:2px; border-radius:4px; background:#111 }
     .hint{opacity:.95;text-align:center;margin-top:6px}
     .hud{ position:fixed; left:10px; bottom:10px; background:#111b; border:1px solid #333; border-radius:8px; padding:8px 10px; font-size:13px }
@@ -16,9 +15,9 @@
 </head>
 <body>
   <header>
-    <h1>A3 – Final (Flicke  + Wireframe)</h1>
+    <h1>A3 – Final (Flicker + Wireframe)</h1>
     <div class="hint">
-      <strong>Place/scale:</strong> hold <kbd>Shift</kbd> and press/hold trackpad, drag finger up/down to scale (color flips by sign).
+      <strong>Place/scale:</strong> ho      <strift</kbd> and press/hold trackpad, drag finger up/down to scale (color flips by sign).  
       <strong>Keys:</strong> <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe, <kbd>P</kbd> pattern on/off (green/pink),
       <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> shape (cube/sphere/torus), <kbd>0</kbd> center camera, <kbd>R</kbd> reset scene, <kbd>S</kbd> save PNG.
       <br><small>(Tip: Shift + single click also drops a shape if you use “tap to click”.)</small>
@@ -28,12 +27,14 @@
   <div id="app"></div>
   <div class="hud" id="hud">shapes: 0 • mode: torus • pattern: off • wire: off • flicker: off</div>
 
-  <!-- Use local copies so THREE always loads -->
-  <script src="vendor/three.min.js"></script>
-  <script src="vendor/OrbitControls.js"></script>
+  <!-- Local (repo) libs so there’s no CDN failure -->
+  <script src="./three.min.js"></script>
+  <script src="./OrbitControls.js"></script>
 
   <script>
-    // ===== Part 1: Scene setup =====
+    // =========================
+    // Part 1: Scene + camera
+    // =========================
     const root = document.getElementById('app');
     const hud  = document.getElementById('hud');
 
@@ -56,12 +57,16 @@
     }
     centerCamera();
 
+    // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 0.65));
     const dir = new THREE.DirectionalLight(0xffffff, 1.0);
     dir.position.set(5, 8, 6);
     scene.add(dir);
 
-    // ===== Part 2: Placement helpers (project to z=0 plane) =====
+    // =========================
+    // Part 2: Placement helpers
+    // (project to z=0 plane)
+    // =========================
     const placePlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
     const raycaster  = new THREE.Raycaster();
     const pointer    = new THREE.Vector2();
@@ -75,8 +80,11 @@
       return raycaster.ray.intersectPlane(placePlane, p) ? p : null;
     }
 
-    // ===== Part 3: Materials + checker pattern (green & pink) =====
-    let USE_PATTERN = false;  // toggle with P
+    // =========================
+    // Part 3: Pattern materials
+    // (green + pink checker)
+    // =========================
+    let USE_PATTERN = false;     // toggle with P
     const PINK  = '#ff2fb3';
     const GREEN = '#00ff66';
 
@@ -98,9 +106,21 @@
     }
     const checkerTex = makeCheckerTexture();
 
+    // =========================
+    // Part 4: Shape factory
+    // (cube / sphere / torus)
+    // =========================
+    let SHAPE_MODE = 'torus';   // 1=cube 2=sphere 3=torus
+    function buildGeometry(){
+      if (SHAPE_MODE === 'cube')   return new THREE.BoxGeometry(1.4,1.4,1.4, 2,2,2);
+      if (SHAPE_MODE === 'sphere') return new THREE.SphereGeometry(0.9, 36, 24);
+      return new THREE.TorusKnotGeometry(0.8, 0.22, 160, 24);
+    }
+
+    let WIREFRAME = false;
     function makeMaterial(color){
       const mat = new THREE.MeshStandardMaterial({
-        color,
+        color: color,
         metalness: 0.2,
         roughness: 0.35,
         emissive: 0x000000,
@@ -110,18 +130,17 @@
       return mat;
     }
 
-    // ===== Part 4: Shape factory (cube / sphere / torus-knot) =====
-    let SHAPE_MODE = 'torus';   // 'cube' | 'sphere' | 'torus'
-    function buildGeometry(){
-      if (SHAPE_MODE === 'cube')   return new THREE.BoxGeometry(1.4,1.4,1.4, 2,2,2);
-      if (SHAPE_MODE === 'sphere') return new THREE.SphereGeometry(0.9, 36, 24);
-      return new THREE.TorusKnotGeometry(0.8, 0.22, 160, 24);
+    // =========================
+    // Part 5: Add shapes
+    // (default torus centered)
+    // =========================
+    const meshes = [];
+    function updateHUD(){
+      hud.textContent = `shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
     }
 
-    const meshes = [];
-
     function addShape(pos, scale=1, sign=+1){
-      const color = (sign >= 0) ? 0xff00aa : 0x00ff88; // flips on sign
+      const color = (sign >= 0) ? 0xff00aa : 0x00ff88; // flip color on sign/drag
       const mesh  = new THREE.Mesh(buildGeometry(), makeMaterial(color));
       mesh.position.copy(pos);
       mesh.scale.setScalar(Math.max(0.1, Math.abs(scale)));
@@ -131,12 +150,17 @@
       return mesh;
     }
 
-    // Default: put ONE torus centered so graders never see a blank page
-    let defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.6, +1);
+    // Show ONE centered torus on load (so graders see something)
+    const defaultMesh = (()=> {
+      const m = addShape(new THREE.Vector3(0,0,0), 1.6, +1);
+      return m;
+    })();
 
-    // ===== Part 5: Placement (trackpad friendly) =====
+    // =========================
+    // Part 6: Interactions
+    // (trackpad-friendly place/scale)
+    // =========================
     let placing = null; // { mesh, startY }
-
     renderer.domElement.addEventListener('pointerdown', (e)=>{
       if (!e.shiftKey) return;
       const p = getWorldPoint(e) || new THREE.Vector3(0,0,0);
@@ -146,7 +170,7 @@
 
     renderer.domElement.addEventListener('pointermove', (e)=>{
       if (!placing) return;
-      const dy = e.clientY - placing.startY;           // up → bigger, down → negative
+      const dy = e.clientY - placing.startY; // up → bigger, down → negative
       let s = 1 + (-dy / 120);
       const sign = (s >= 0) ? +1 : -1;
       placing.mesh.material.color.set( (sign>=0) ? 0xff00aa : 0x00ff88 );
@@ -157,27 +181,24 @@
 
     window.addEventListener('pointerup', ()=>{ placing = null; });
 
-    // Also allow Shift + single click (tap-to-click users)
+    // Tap-to-click fallback: Shift + single click drops a 1× shape
     renderer.domElement.addEventListener('click', (e)=>{
       if (!e.shiftKey || placing) return;
       const p = getWorldPoint(e) || new THREE.Vector3(0,0,0);
       addShape(p, 1, +1);
     });
 
-    // ===== Part 6: Toggles + extras =====
-    let FLICKER   = false;
-    let WIREFRAME = false;
+    // =========================
+    // Part 7: Toggles + Bonus
+    // =========================
+    let FLICKER = false;
 
-    function applyWireframe(){
-      meshes.forEach(m => m.material.wireframe = WIREFRAME);
-    }
-    function applyPattern(){
-      meshes.forEach(m => { m.material.map = USE_PATTERN ? checkerTex : null; m.material.needsUpdate = true; });
-    }
+    function applyWireframe(){ meshes.forEach(m => m.material.wireframe = WIREFRAME); }
+    function applyPattern(){ meshes.forEach(m => { m.material.map = USE_PATTERN ? checkerTex : null; m.material.needsUpdate = true; }); }
 
     function savePNG(){
       const a = document.createElement('a');
-      a.download = 'a3_scene.png';
+      a.download = 'a3.png';
       a.href = renderer.domElement.toDataURL('image/png');
       a.click();
     }
@@ -187,31 +208,29 @@
       if (k === 'w'){ WIREFRAME = !WIREFRAME; applyWireframe(); updateHUD(); }
       else if (k === 'f'){ FLICKER = !FLICKER; if (!FLICKER){ meshes.forEach(m => m.material.emissiveIntensity = 0); } updateHUD(); }
       else if (k === 'p'){ USE_PATTERN = !USE_PATTERN; applyPattern(); updateHUD(); }
-      else if (k === '1'){ SHAPE_MODE = 'cube';   updateHUD(); }
-      else if (k === '2'){ SHAPE_MODE = 'sphere'; updateHUD(); }
-      else if (k === '3'){ SHAPE_MODE = 'torus';  updateHUD(); }
+      else if (k === '1'){ SHAPE_MODE = 'cube';  updateHUD(); }
+      else if (k === '2'){ SHAPE_MODE = 'sphere';updateHUD(); }
+      else if (k === '3'){ SHAPE_MODE = 'torus'; updateHUD(); }
       else if (k === '0'){ centerCamera(); }
       else if (k === 's'){ savePNG(); }
       else if (k === 'r'){
         meshes.forEach(m => scene.remove(m));
         meshes.length = 0;
-        defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.6, +1);
+        // Put the single centered torus back
+        SHAPE_MODE = 'torus';
+        addShape(new THREE.Vector3(0,0,0), 1.6, +1);
         centerCamera();
-        updateHUD();
       }
     });
 
-    // ===== Part 7: HUD, resize, animate =====
-    function updateHUD(){
-      hud.textContent = `shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
-    }
-
+    // Resize
     window.addEventListener('resize', ()=>{
       const w = root.clientWidth, h = root.clientHeight;
       camera.aspect = w / h; camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     });
 
+    // Animate
     const clock = new THREE.Clock();
     (function animate(){
       requestAnimationFrame(animate);
