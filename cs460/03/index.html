@@ -19,7 +19,7 @@
     <div class="hint">
       <strong>Place/scale:</strong> hold <kbd>Shift</kbd> and press/hold trackpad, drag finger up/down to scale (color flips by sign).  
       <strong>Keys:</strong> <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe, <kbd>P</kbd> pattern on/off (green/pink),
-      <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> shape (cube/sphere/torus), <kbd>0</kbd> center camera, <kbd>R</kbd> reset scene.
+      <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> shape (cube/sphere/torus), <kbd>0</kbd> center camera, <kbd>R</kbd> reset scene, <kbd>S</kbd> save PNG.
       <br><small>(Tip: Shift + single click also drops a shape if you use “tap to click”.)</small>
     </div>
   </header>
@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/three@0.161.0/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    // ===== Scene setup =====
+    // ===== Part 1: Scene & camera =====
     const root = document.getElementById('app');
     const hud  = document.getElementById('hud');
 
@@ -40,12 +40,12 @@
     scene.background = new THREE.Color(0x000000);
 
     const camera = new THREE.PerspectiveCamera(50, root.clientWidth/root.clientHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({antialias:true});
+    const renderer = new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); // preserve for PNG saving
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.setSize(root.clientWidth, root.clientHeight);
     root.appendChild(renderer.domElement);
 
-    // Controls (for exploring)
+    // Orbit controls for exploration
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
@@ -54,7 +54,6 @@
       camera.position.set(0,0,9);
       controls.update();
     }
-    centerCamera(); // start centered under the header
 
     // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 0.65));
@@ -62,7 +61,7 @@
     dir.position.set(5, 8, 6);
     scene.add(dir);
 
-    // ===== Placement helpers (z=0 plane) =====
+    // ===== Part 2: Placement helpers (project to a z=0 plane) =====
     const placePlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
     const raycaster  = new THREE.Raycaster();
     const pointer    = new THREE.Vector2();
@@ -76,7 +75,7 @@
       return raycaster.ray.intersectPlane(placePlane, p) ? p : null;
     }
 
-    // ===== Materials / Pattern (green + pink checker) =====
+    // ===== Part 3: Pattern materials (green + pink checker; PDF colors) =====
     let USE_PATTERN = false;                 // toggle with P
     const PINK  = '#ff2fb3';
     const GREEN = '#00ff66';
@@ -111,19 +110,20 @@
       return mat;
     }
 
-    // ===== Shape factory (cube/sphere/torus) =====
+    // ===== Part 4: Shape factory (cube/sphere/torus) =====
     let SHAPE_MODE = 'torus';   // 'cube' | 'sphere' | 'torus'
     function buildGeometry(){
       if (SHAPE_MODE === 'cube')   return new THREE.BoxGeometry(1.4,1.4,1.4, 2,2,2);
       if (SHAPE_MODE === 'sphere') return new THREE.SphereGeometry(0.9, 36, 24);
+      // torus knot looks nice for the “mini world of design” look
       return new THREE.TorusKnotGeometry(0.8, 0.22, 160, 24);
     }
 
-    // Start BLANK (no default mesh)
+    // Store all meshes
     const meshes = [];
 
     function addShape(pos, scale=1, sign=+1){
-      const color = (sign >= 0) ? 0xff00aa : 0x00ff88; // flip color on sign
+      const color = (sign >= 0) ? 0xff00aa : 0x00ff88; // flip color by sign while dragging
       const mesh  = new THREE.Mesh(buildGeometry(), makeMaterial(color));
       mesh.position.copy(pos);
       mesh.scale.setScalar(Math.max(0.1, Math.abs(scale)));
@@ -133,9 +133,17 @@
       return mesh;
     }
 
-    // ===== Placement (trackpad friendly) =====
-    let placing = null; // { mesh, startY }
+    // ===== Part 5: Start with ONE CENTERED SHAPE =====
+    let defaultMesh = null;
+    function addCenteredDefault(){
+      // force torus for the opening hero shape
+      const prev = SHAPE_MODE; SHAPE_MODE = 'torus';
+      defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.6, +1);
+      SHAPE_MODE = prev;
+    }
 
+    // ===== Part 6: Placement interaction (trackpad-friendly) =====
+    let placing = null; // { mesh, startY }
     renderer.domElement.addEventListener('pointerdown', (e)=>{
       if (!e.shiftKey) return;
       const p = getWorldPoint(e) || new THREE.Vector3(0,0,0);
@@ -153,17 +161,16 @@
       const p = getWorldPoint(e);
       if (p) placing.mesh.position.copy(p);
     });
-
     window.addEventListener('pointerup', ()=>{ placing = null; });
 
-    // Fallback for “tap to click”: Shift + single click drops a 1× shape
+    // Fallback: Shift + single click drops a 1× shape (helps with “tap to click”)
     renderer.domElement.addEventListener('click', (e)=>{
       if (!e.shiftKey || placing) return;
       const p = getWorldPoint(e) || new THREE.Vector3(0,0,0);
       addShape(p, 1, +1);
     });
 
-    // ===== Toggles =====
+    // ===== Part 7: Toggles & bonus keys =====
     let FLICKER   = false;
     let WIREFRAME = false;
 
@@ -172,6 +179,23 @@
     }
     function applyPattern(){
       meshes.forEach(m => { m.material.map = USE_PATTERN ? checkerTex : null; m.material.needsUpdate = true; });
+    }
+
+    function resetScene(){
+      meshes.forEach(m => scene.remove(m));
+      meshes.length = 0;
+      defaultMesh = null;
+      addCenteredDefault();
+      updateHUD();
+      centerCamera();
+    }
+
+    // BONUS: save PNG
+    function savePNG(){
+      const a = document.createElement('a');
+      a.download = 'a3_screenshot.png';
+      a.href = renderer.domElement.toDataURL('image/png');
+      a.click();
     }
 
     window.addEventListener('keydown', (e)=>{
@@ -183,12 +207,8 @@
       else if (k === '2'){ SHAPE_MODE = 'sphere';updateHUD(); }
       else if (k === '3'){ SHAPE_MODE = 'torus'; updateHUD(); }
       else if (k === '0'){ centerCamera(); }
-      else if (k === 'r'){
-        meshes.forEach(m => scene.remove(m));
-        meshes.length = 0;
-        updateHUD();
-        centerCamera();
-      }
+      else if (k === 'r'){ resetScene(); }
+      else if (k === 's'){ savePNG(); }
     });
 
     // HUD
@@ -205,18 +225,28 @@
 
     // Animate
     const clock = new THREE.Clock();
-    (function animate(){
+    function animate(){
       requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
 
-      // Flicker emissive pulse (if enabled)
+      // subtle spin for the default hero shape so it’s clearly visible on load
+      if (defaultMesh){
+        defaultMesh.rotation.y = t * 0.35;
+        defaultMesh.rotation.x = t * 0.15;
+      }
       if (FLICKER){
         const pulse = 0.4 + 0.6*Math.max(0, Math.sin(t*6));
         meshes.forEach(m => { m.material.emissive = new THREE.Color(0xffffff); m.material.emissiveIntensity = pulse; });
       }
       controls.update();
       renderer.render(scene, camera);
-    })();
+    }
+
+    // boot
+    centerCamera();
+    addCenteredDefault();
+    updateHUD();
+    animate();
   </script>
 </body>
 </html>
