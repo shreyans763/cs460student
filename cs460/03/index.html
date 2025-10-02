@@ -6,10 +6,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     html,body{margin:0;height:100%;background:#000;color:#fff;font:16px system-ui,Arial}
-    header{ text-align:center; padding:14px 0 6px }
-    #app{ position:fixed; inset:0; top:96px } /* canvas area starts below header */
+    header{ text-align:center; padding:16px 0 6px }
+    #app{ position:fixed; inset:0; top:100px } /* leave room for header text */
     kbd{ padding:2px 6px; border:1px solid #888; border-bottom-width:2px; border-radius:4px; background:#111 }
-    .hint{opacity:.9;text-align:center;margin-top:6px}
+    .hint{opacity:.95;text-align:center;margin-top:6px}
     .hud{ position:fixed; left:10px; bottom:10px; background:#111b; border:1px solid #333; border-radius:8px; padding:8px 10px; font-size:13px }
   </style>
 </head>
@@ -18,7 +18,8 @@
     <h1>A3 – Final (Flicker + Wireframe)</h1>
     <div class="hint">
       <strong>Place/scale:</strong> hold <kbd>Shift</kbd> and press/hold trackpad, drag finger up/down to scale (color flips by sign).  
-      <strong>Keys:</strong> <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe, <kbd>P</kbd> pattern on/off, <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> shape (cube/sphere/torus), <kbd>R</kbd> reset.
+      <strong>Keys:</strong> <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe, <kbd>P</kbd> pattern on/off (green/pink),
+      <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> shape (cube/sphere/torus), <kbd>0</kbd> center camera, <kbd>R</kbd> reset scene.
       <br><small>(Tip: Shift + single click also drops a shape if you use “tap to click”.)</small>
     </div>
   </header>
@@ -26,16 +27,12 @@
   <div id="app"></div>
   <div class="hud" id="hud">shapes: 0 • mode: torus • pattern: off • wire: off • flicker: off</div>
 
-  <!-- three.js + orbit controls via unpkg -->
+  <!-- three.js + orbit controls via CDN -->
   <script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three@0.161.0/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    // ===================== Config =====================
-    const START_WITH_SHAPE = true;   // set to false if you want to start blank
-    const PATTERN_GREEN_PINK = true; // default colors for the checker texture
-
-    // ===================== Scene setup =====================
+    // ===== Scene setup =====
     const root = document.getElementById('app');
     const hud  = document.getElementById('hud');
 
@@ -48,9 +45,16 @@
     renderer.setSize(root.clientWidth, root.clientHeight);
     root.appendChild(renderer.domElement);
 
-    // Controls
+    // Controls (for exploring)
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+
+    function centerCamera(){
+      controls.target.set(0,0,0);
+      camera.position.set(0,0,9);
+      controls.update();
+    }
+    centerCamera(); // start centered under the header
 
     // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 0.65));
@@ -58,17 +62,7 @@
     dir.position.set(5, 8, 6);
     scene.add(dir);
 
-    // Keep camera centered on the origin (middle of canvas area)
-    function centerCamera() {
-      controls.target.set(0,0,0);
-      camera.position.set(0, 0, 9);
-      camera.lookAt(0,0,0);
-      controls.update();
-    }
-    centerCamera();
-
-    // ===================== Placement helpers =====================
-    // project to a z=0 plane so placement is predictable + centered
+    // ===== Placement helpers (z=0 plane) =====
     const placePlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
     const raycaster  = new THREE.Raycaster();
     const pointer    = new THREE.Vector2();
@@ -82,12 +76,12 @@
       return raycaster.ray.intersectPlane(placePlane, p) ? p : null;
     }
 
-    // ===================== Pattern materials =====================
-    let USE_PATTERN = false;
-    let FLICKER   = false;
-    let WIREFRAME = false;
+    // ===== Materials / Pattern (green + pink checker) =====
+    let USE_PATTERN = false;                 // toggle with P
+    const PINK  = '#ff2fb3';
+    const GREEN = '#00ff66';
 
-    function makeCheckerTexture(size=256, squares=8, cA='#00ff88', cB='#ff22aa'){
+    function makeCheckerTexture(size=256, squares=8, cA=PINK, cB=GREEN){
       const cvs = document.createElement('canvas');
       cvs.width = cvs.height = size;
       const ctx = cvs.getContext('2d');
@@ -103,11 +97,11 @@
       tex.anisotropy = 4;
       return tex;
     }
-    let checkerTex = makeCheckerTexture();
+    const checkerTex = makeCheckerTexture();
 
-    function makeMaterial(colorHex){
+    function makeMaterial(color){
       const mat = new THREE.MeshStandardMaterial({
-        color: colorHex,
+        color: color,
         metalness: 0.2,
         roughness: 0.35,
         emissive: 0x000000,
@@ -117,7 +111,7 @@
       return mat;
     }
 
-    // ===================== Shape factory =====================
+    // ===== Shape factory (cube/sphere/torus) =====
     let SHAPE_MODE = 'torus';   // 'cube' | 'sphere' | 'torus'
     function buildGeometry(){
       if (SHAPE_MODE === 'cube')   return new THREE.BoxGeometry(1.4,1.4,1.4, 2,2,2);
@@ -125,10 +119,11 @@
       return new THREE.TorusKnotGeometry(0.8, 0.22, 160, 24);
     }
 
+    // Start BLANK (no default mesh)
     const meshes = [];
 
     function addShape(pos, scale=1, sign=+1){
-      const color = (sign >= 0) ? 0xff00aa : 0x00ff88; // flips on sign
+      const color = (sign >= 0) ? 0xff00aa : 0x00ff88; // flip color on sign
       const mesh  = new THREE.Mesh(buildGeometry(), makeMaterial(color));
       mesh.position.copy(pos);
       mesh.scale.setScalar(Math.max(0.1, Math.abs(scale)));
@@ -138,15 +133,9 @@
       return mesh;
     }
 
-    // Default shape: centered and comfortably sized
-    let defaultMesh = null;
-    if (START_WITH_SHAPE) {
-      defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.25, +1);
-      centerCamera(); // make sure it's dead-center under the header
-    }
-
-    // ===================== Placement (trackpad friendly) =====================
+    // ===== Placement (trackpad friendly) =====
     let placing = null; // { mesh, startY }
+
     renderer.domElement.addEventListener('pointerdown', (e)=>{
       if (!e.shiftKey) return;
       const p = getWorldPoint(e) || new THREE.Vector3(0,0,0);
@@ -167,14 +156,17 @@
 
     window.addEventListener('pointerup', ()=>{ placing = null; });
 
-    // Fallback for “tap to click”: Shift + single click drops a 1× shape at center
+    // Fallback for “tap to click”: Shift + single click drops a 1× shape
     renderer.domElement.addEventListener('click', (e)=>{
       if (!e.shiftKey || placing) return;
       const p = getWorldPoint(e) || new THREE.Vector3(0,0,0);
       addShape(p, 1, +1);
     });
 
-    // ===================== Toggles =====================
+    // ===== Toggles =====
+    let FLICKER   = false;
+    let WIREFRAME = false;
+
     function applyWireframe(){
       meshes.forEach(m => m.material.wireframe = WIREFRAME);
     }
@@ -190,16 +182,12 @@
       else if (k === '1'){ SHAPE_MODE = 'cube';  updateHUD(); }
       else if (k === '2'){ SHAPE_MODE = 'sphere';updateHUD(); }
       else if (k === '3'){ SHAPE_MODE = 'torus'; updateHUD(); }
+      else if (k === '0'){ centerCamera(); }
       else if (k === 'r'){
-        // reset: clear all shapes; if START_WITH_SHAPE => restore single centered default
         meshes.forEach(m => scene.remove(m));
         meshes.length = 0;
-        defaultMesh = null;
-        if (START_WITH_SHAPE) {
-          defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.25, +1);
-        }
-        centerCamera();
         updateHUD();
+        centerCamera();
       }
     });
 
@@ -207,14 +195,12 @@
     function updateHUD(){
       hud.textContent = `shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
     }
-    updateHUD();
 
-    // Resize (keep camera centered)
+    // Resize
     window.addEventListener('resize', ()=>{
       const w = root.clientWidth, h = root.clientHeight;
       camera.aspect = w / h; camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-      centerCamera();
     });
 
     // Animate
@@ -223,12 +209,7 @@
       requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
 
-      // Gentle rotation only if we start with the default
-      if (defaultMesh){
-        defaultMesh.rotation.y = t * 0.35;
-        defaultMesh.rotation.x = t * 0.15;
-      }
-
+      // Flicker emissive pulse (if enabled)
       if (FLICKER){
         const pulse = 0.4 + 0.6*Math.max(0, Math.sin(t*6));
         meshes.forEach(m => { m.material.emissive = new THREE.Color(0xffffff); m.material.emissiveIntensity = pulse; });
