@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/three@0.161.0/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    // ===== Part 1: Scene & camera =====
+    // ===== Scene & camera =====
     const root = document.getElementById('app');
     const hud  = document.getElementById('hud');
 
@@ -40,12 +40,11 @@
     scene.background = new THREE.Color(0x000000);
 
     const camera = new THREE.PerspectiveCamera(50, root.clientWidth/root.clientHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); // preserve for PNG saving
+    const renderer = new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); // for PNG
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.setSize(root.clientWidth, root.clientHeight);
     root.appendChild(renderer.domElement);
 
-    // Orbit controls for exploration
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
@@ -61,7 +60,7 @@
     dir.position.set(5, 8, 6);
     scene.add(dir);
 
-    // ===== Part 2: Placement helpers (project to a z=0 plane) =====
+    // ===== Placement helpers (z=0 plane) =====
     const placePlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
     const raycaster  = new THREE.Raycaster();
     const pointer    = new THREE.Vector2();
@@ -75,8 +74,8 @@
       return raycaster.ray.intersectPlane(placePlane, p) ? p : null;
     }
 
-    // ===== Part 3: Pattern materials (green + pink checker; PDF colors) =====
-    let USE_PATTERN = false;                 // toggle with P
+    // ===== Pattern materials (green + pink checker) =====
+    let USE_PATTERN = false;
     const PINK  = '#ff2fb3';
     const GREEN = '#00ff66';
 
@@ -110,20 +109,20 @@
       return mat;
     }
 
-    // ===== Part 4: Shape factory (cube/sphere/torus) =====
+    // ===== Shape factory =====
     let SHAPE_MODE = 'torus';   // 'cube' | 'sphere' | 'torus'
     function buildGeometry(){
       if (SHAPE_MODE === 'cube')   return new THREE.BoxGeometry(1.4,1.4,1.4, 2,2,2);
       if (SHAPE_MODE === 'sphere') return new THREE.SphereGeometry(0.9, 36, 24);
-      // torus knot looks nice for the “mini world of design” look
       return new THREE.TorusKnotGeometry(0.8, 0.22, 160, 24);
     }
 
-    // Store all meshes
+    // ===== Shapes list =====
     const meshes = [];
+    let defaultMesh = null;
 
     function addShape(pos, scale=1, sign=+1){
-      const color = (sign >= 0) ? 0xff00aa : 0x00ff88; // flip color by sign while dragging
+      const color = (sign >= 0) ? 0xff00aa : 0x00ff88; // flips by sign
       const mesh  = new THREE.Mesh(buildGeometry(), makeMaterial(color));
       mesh.position.copy(pos);
       mesh.scale.setScalar(Math.max(0.1, Math.abs(scale)));
@@ -133,16 +132,13 @@
       return mesh;
     }
 
-    // ===== Part 5: Start with ONE CENTERED SHAPE =====
-    let defaultMesh = null;
     function addCenteredDefault(){
-      // force torus for the opening hero shape
       const prev = SHAPE_MODE; SHAPE_MODE = 'torus';
       defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.6, +1);
       SHAPE_MODE = prev;
     }
 
-    // ===== Part 6: Placement interaction (trackpad-friendly) =====
+    // ===== Placement (trackpad friendly) =====
     let placing = null; // { mesh, startY }
     renderer.domElement.addEventListener('pointerdown', (e)=>{
       if (!e.shiftKey) return;
@@ -150,10 +146,9 @@
       const m = addShape(p, 1, +1);
       placing = { mesh: m, startY: e.clientY };
     });
-
     renderer.domElement.addEventListener('pointermove', (e)=>{
       if (!placing) return;
-      const dy = e.clientY - placing.startY; // up → bigger, down → negative
+      const dy = e.clientY - placing.startY;
       let s = 1 + (-dy / 120);
       const sign = (s >= 0) ? +1 : -1;
       placing.mesh.material.color.set( (sign>=0) ? 0xff00aa : 0x00ff88 );
@@ -162,15 +157,13 @@
       if (p) placing.mesh.position.copy(p);
     });
     window.addEventListener('pointerup', ()=>{ placing = null; });
-
-    // Fallback: Shift + single click drops a 1× shape (helps with “tap to click”)
     renderer.domElement.addEventListener('click', (e)=>{
       if (!e.shiftKey || placing) return;
       const p = getWorldPoint(e) || new THREE.Vector3(0,0,0);
       addShape(p, 1, +1);
     });
 
-    // ===== Part 7: Toggles & bonus keys =====
+    // ===== Toggles & bonus =====
     let FLICKER   = false;
     let WIREFRAME = false;
 
@@ -180,7 +173,6 @@
     function applyPattern(){
       meshes.forEach(m => { m.material.map = USE_PATTERN ? checkerTex : null; m.material.needsUpdate = true; });
     }
-
     function resetScene(){
       meshes.forEach(m => scene.remove(m));
       meshes.length = 0;
@@ -189,8 +181,6 @@
       updateHUD();
       centerCamera();
     }
-
-    // BONUS: save PNG
     function savePNG(){
       const a = document.createElement('a');
       a.download = 'a3_screenshot.png';
@@ -228,8 +218,6 @@
     function animate(){
       requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
-
-      // subtle spin for the default hero shape so it’s clearly visible on load
       if (defaultMesh){
         defaultMesh.rotation.y = t * 0.35;
         defaultMesh.rotation.x = t * 0.15;
@@ -242,7 +230,7 @@
       renderer.render(scene, camera);
     }
 
-    // boot
+    // Boot: center + add the hero torus
     centerCamera();
     addCenteredDefault();
     updateHUD();
