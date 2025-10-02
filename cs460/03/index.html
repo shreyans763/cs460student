@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     html,body{margin:0;height:100%;background:#000;color:#fff;font:16px system-ui,Arial}
-    header{ text-align:center; padding:14px 0 6px }
-    /* render area starts under header so “center” is visually centered */
-    #app{ position:fixed; inset:0; top:96px }
+    header{ text-align:center; padding:16px 0 6px }
+    /* render area starts below header so “center” is visually centered */
+    #app{ position:fixed; inset:0; top:100px }
     kbd{ padding:2px 6px; border:1px solid #888; border-bottom-width:2px; border-radius:4px; background:#111 }
-    .hint{opacity:.9;text-align:center;margin-top:6px}
+    .hint{opacity:.95;text-align:center;margin-top:6px}
     .hud{ position:fixed; left:10px; bottom:10px; background:#111b; border:1px solid #333; border-radius:8px; padding:8px 10px; font-size:13px }
   </style>
 </head>
@@ -18,9 +18,9 @@
   <header>
     <h1>A3 – Final (Flicker + Wireframe)</h1>
     <div class="hint">
-      <strong>Place/scale:</strong> hold <kbd>Shift</kbd> and press/hold trackpad, drag up/down to scale (color flips by sign).  
-      <strong>Keys:</strong> <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe, <kbd>P</kbd> pattern on/off, 
-      <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> cube/sphere/torus, <kbd>0</kbd> center camera, <kbd>R</kbd> reset.
+      <strong>Place/scale:</strong> hold <kbd>Shift</kbd> and press/hold trackpad, drag finger up/down to scale (color flips by sign).  
+      <strong>Keys:</strong> <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe, <kbd>P</kbd> pattern on/off (green/pink),
+      <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> cube/sphere/torus, <kbd>0</kbd> center camera, <kbd>R</kbd> reset scene.
     </div>
   </header>
 
@@ -31,10 +31,7 @@
   <script src="https://unpkg.com/three@0.161.0/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    // --- Start with one centered shape ---
-    const START_WITH_SHAPE = true;
-
-    // Scene
+    // ========== Scene ==========
     const root = document.getElementById('app');
     const hud  = document.getElementById('hud');
     const scene = new THREE.Scene();
@@ -49,76 +46,79 @@
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-    dir.position.set(5, 8, 6);
-    scene.add(dir);
-
     function centerCamera(){
       controls.target.set(0,0,0);
       camera.position.set(0,0,9);
       camera.lookAt(0,0,0);
       controls.update();
     }
-    centerCamera();
 
-    // Pattern (green/pink)
-    let USE_PATTERN=false, FLICKER=false, WIREFRAME=false;
-    function makeCheckerTexture(size=256, squares=8, cA='#00ff88', cB='#ff22aa'){
-      const c=document.createElement('canvas'); c.width=c.height=size;
-      const g=c.getContext('2d'), cell=size/squares;
-      for(let y=0;y<squares;y++)for(let x=0;x<squares;x++){
-        g.fillStyle=((x+y)%2===0)?cA:cB; g.fillRect(x*cell,y*cell,cell,cell);
-      }
-      const tex=new THREE.CanvasTexture(c); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4; return tex;
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(5,8,6); scene.add(dir);
+
+    // ========== Placement helpers (z=0 plane) ==========
+    const placePlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+    const raycaster  = new THREE.Raycaster();
+    const pointer    = new THREE.Vector2();
+    function getWorldPoint(e){
+      const r = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      pointer.y = -((e.clientY - r.top)  / r.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const p = new THREE.Vector3();
+      return raycaster.ray.intersectPlane(placePlane, p) ? p : null;
     }
-    let checkerTex = makeCheckerTexture();
 
-    function makeMaterial(colorHex){
+    // ========== Materials / Pattern (green+pink) ==========
+    let USE_PATTERN=false, FLICKER=false, WIREFRAME=false;
+    const PINK  = '#ff2fb3';   // pdf colors
+    const GREEN = '#00ff66';
+
+    function makeCheckerTexture(size=256, squares=8, cA=PINK, cB=GREEN){
+      const cvs=document.createElement('canvas'); cvs.width=cvs.height=size;
+      const ctx=cvs.getContext('2d'), cell=size/squares;
+      for(let y=0;y<squares;y++) for(let x=0;x<squares;x++){
+        ctx.fillStyle=((x+y)%2===0)?cA:cB; ctx.fillRect(x*cell,y*cell,cell,cell);
+      }
+      const tex=new THREE.CanvasTexture(cvs); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4; return tex;
+    }
+    const checkerTex = makeCheckerTexture();
+
+    function makeMaterial(color){
       const m=new THREE.MeshStandardMaterial({
-        color: colorHex, metalness:0.2, roughness:0.35, emissive:0x000000,
+        color, metalness:0.2, roughness:0.35, emissive:0x000000,
         map: USE_PATTERN ? checkerTex : null
       });
       m.wireframe = WIREFRAME;
       return m;
     }
 
-    // Shapes
+    // ========== Shapes ==========
     let SHAPE_MODE='torus';
-    function geo(){
-      if (SHAPE_MODE==='cube')   return new THREE.BoxGeometry(1.4,1.4,1.4, 2,2,2);
-      if (SHAPE_MODE==='sphere') return new THREE.SphereGeometry(0.9, 36, 24);
-      return new THREE.TorusKnotGeometry(0.8, 0.22, 160, 24);
+    function buildGeometry(){
+      if (SHAPE_MODE==='cube')   return new THREE.BoxGeometry(1.4,1.4,1.4,2,2,2);
+      if (SHAPE_MODE==='sphere') return new THREE.SphereGeometry(0.9,36,24);
+      return new THREE.TorusKnotGeometry(0.8,0.22,160,24);
     }
 
     const meshes=[];
     function addShape(pos,scale=1,sign=+1){
       const color = (sign>=0) ? 0xff00aa : 0x00ff88;
-      const mesh  = new THREE.Mesh(geo(), makeMaterial(color));
+      const mesh  = new THREE.Mesh(buildGeometry(), makeMaterial(color));
       mesh.position.copy(pos);
       mesh.scale.setScalar(Math.max(0.1, Math.abs(scale)));
       scene.add(mesh); meshes.push(mesh); updateHUD(); return mesh;
     }
 
-    // Default centered shape
-    let defaultMesh=null;
-    if (START_WITH_SHAPE){
-      defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.25, +1);
-      centerCamera();
-    }
+    // --- Default: ONE centered shape so page isn't empty ---
+    addShape(new THREE.Vector3(0,0,0), 1.25, +1);
+    centerCamera();
 
-    // Placement helpers
-    const placePlane=new THREE.Plane(new THREE.Vector3(0,0,1),0), ray=new THREE.Raycaster(), pt=new THREE.Vector2();
-    function worldPoint(e){
-      const r=renderer.domElement.getBoundingClientRect();
-      pt.x=((e.clientX-r.left)/r.width)*2-1; pt.y=-((e.clientY-r.top)/r.height)*2+1;
-      ray.setFromCamera(pt,camera); const p=new THREE.Vector3();
-      return ray.ray.intersectPlane(placePlane,p)?p:null;
-    }
+    // ========== Placement (trackpad-friendly) ==========
     let placing=null;
     renderer.domElement.addEventListener('pointerdown', e=>{
       if(!e.shiftKey) return;
-      const p=worldPoint(e)||new THREE.Vector3(0,0,0);
+      const p=getWorldPoint(e)||new THREE.Vector3(0,0,0);
       const m=addShape(p,1,+1); placing={mesh:m,startY:e.clientY};
     });
     renderer.domElement.addEventListener('pointermove', e=>{
@@ -126,11 +126,15 @@
       const dy=e.clientY-placing.startY, s=1+(-dy/120), sign=s>=0?+1:-1;
       placing.mesh.material.color.set(sign>=0?0xff00aa:0x00ff88);
       placing.mesh.scale.setScalar(Math.max(0.1,Math.abs(s)));
-      const p=worldPoint(e); if(p) placing.mesh.position.copy(p);
+      const p=getWorldPoint(e); if(p) placing.mesh.position.copy(p);
     });
     window.addEventListener('pointerup', ()=>placing=null);
+    renderer.domElement.addEventListener('click', e=>{
+      if(!e.shiftKey || placing) return;
+      const p=getWorldPoint(e)||new THREE.Vector3(0,0,0); addShape(p,1,+1);
+    });
 
-    // Toggles
+    // ========== Toggles ==========
     function applyWire(){ meshes.forEach(m=>m.material.wireframe=WIREFRAME); }
     function applyPattern(){ meshes.forEach(m=>{ m.material.map=USE_PATTERN?checkerTex:null; m.material.needsUpdate=true; }); }
 
@@ -143,11 +147,7 @@
       else if (k==='2'){ SHAPE_MODE='sphere'; updateHUD(); }
       else if (k==='3'){ SHAPE_MODE='torus';  updateHUD(); }
       else if (k==='0'){ centerCamera(); }
-      else if (k==='r'){
-        meshes.forEach(m=>scene.remove(m)); meshes.length=0; defaultMesh=null;
-        defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.25, +1);
-        centerCamera(); updateHUD();
-      }
+      else if (k==='r'){ meshes.forEach(m=>scene.remove(m)); meshes.length=0; addShape(new THREE.Vector3(0,0,0),1.25,+1); centerCamera(); updateHUD(); }
     });
 
     function updateHUD(){
@@ -155,21 +155,24 @@
     }
     updateHUD();
 
-    // Keep centered on resize
+    // ========== Resize ==========
     window.addEventListener('resize', ()=>{
       camera.aspect = root.clientWidth/root.clientHeight; camera.updateProjectionMatrix();
       renderer.setSize(root.clientWidth, root.clientHeight);
       centerCamera();
     });
 
-    // Animate
+    // ========== Animate ==========
     const clock=new THREE.Clock();
     (function animate(){
       requestAnimationFrame(animate);
       const t=clock.getElapsedTime();
-      if(defaultMesh){ defaultMesh.rotation.y=t*0.35; defaultMesh.rotation.x=t*0.15; }
-      if(FLICKER){ const p=0.4+0.6*Math.max(0,Math.sin(t*6)); meshes.forEach(m=>{ m.material.emissive=new THREE.Color(0xffffff); m.material.emissiveIntensity=p; }); }
-      controls.update(); renderer.render(scene,camera);
+      if(FLICKER){
+        const pulse=0.4+0.6*Math.max(0,Math.sin(t*6));
+        meshes.forEach(m=>{ m.material.emissive=new THREE.Color(0xffffff); m.material.emissiveIntensity=pulse; });
+      }
+      controls.update();
+      renderer.render(scene,camera);
     })();
   </script>
 </body>
