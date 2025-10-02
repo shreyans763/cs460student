@@ -28,7 +28,7 @@
   <div class="hud" id="hud">loading...</div>
 
   <script>
-    // ---- Load THREE and OrbitControls with fallbacks (no local files needed) ----
+    // ---- Load THREE and OrbitControls with fallbacks (single file; no local libs) ----
     (function boot(){
       const HUD = document.getElementById('hud');
       const threeCDNs = [
@@ -43,187 +43,57 @@
       function loadScript(src){
         return new Promise((res,rej)=>{
           const s=document.createElement('script');
-          s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s);
+          s.src=src; s.onload=()=>res(src); s.onerror=()=>rej(src);
+          document.head.appendChild(s);
         });
       }
 
-<<<<<<< HEAD
-    const camera = new THREE.PerspectiveCamera(50, root.clientWidth/root.clientHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    renderer.setSize(root.clientWidth, root.clientHeight);
-    root.appendChild(renderer.domElement);
-
-    // Controls (for exploring)
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-
-    function centerCamera(){
-      controls.target.set(0,0,0);
-      camera.position.set(0,0,9);
-      controls.update();
-    }
-    centerCamera(); // start centered under the header
-
-    // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-    dir.position.set(5, 8, 6);
-    scene.add(dir);
-
-    // ===== Placement helpers (z=0 plane) =====
-    const placePlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
-    const raycaster  = new THREE.Raycaster();
-    const pointer    = new THREE.Vector2();
-
-    function getWorldPoint(e){
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      const p = new THREE.Vector3();
-      return raycaster.ray.intersectPlane(placePlane, p) ? p : null;
-    }
-
-    // ===== Materials / Pattern (green + pink checker) =====
-    let USE_PATTERN = false;                 // toggle with P
-    const PINK  = '#ff2fb3';
-    const GREEN = '#00ff66';
-
-    function makeCheckerTexture(size=256, squares=8, cA=PINK, cB=GREEN){
-      const cvs = document.createElement('canvas');
-      cvs.width = cvs.height = size;
-      const ctx = cvs.getContext('2d');
-      const cell = size / squares;
-      for (let y=0; y<squares; y++){
-        for (let x=0; x<squares; x++){
-          ctx.fillStyle = ((x+y)%2===0)? cA : cB;
-          ctx.fillRect(x*cell, y*cell, cell, cell);
-=======
       (async ()=>{
-        // Try globals from two CDNs; if both blocked, try ESM from skypack.
+        // Try THREE from 2 CDNs; if blocked, try ESM from Skypack.
         let threeOK=false;
-        for (const url of threeCDNs){
-          try{ await loadScript(url); threeOK=true; break; }catch{}
->>>>>>> 19d80a1 (A3: clean header; default centered torus; single-file with CDN fallbacks)
-        }
+        for (const url of threeCDNs){ try{ await loadScript(url); threeOK=true; break; }catch{} }
         if(!threeOK){
-          try{
-            const mod = await import('https://cdn.skypack.dev/three@0.161.0');
-            window.THREE = mod; // expose for rest of code
-            threeOK=true;
-          }catch{}
+          try{ const mod=await import('https://cdn.skypack.dev/three@0.161.0'); window.THREE=mod; threeOK=true; }catch{}
         }
         if(!threeOK){ HUD.textContent='Could not load three.js (network/CDN blocked)'; return; }
 
+        // OrbitControls (global or ESM)
         let ocOK=false;
-        for (const url of ocCDNs){
-          try{ await loadScript(url); ocOK=true; break; }catch{}
-        }
+        for (const url of ocCDNs){ try{ await loadScript(url); ocOK=true; break; }catch{} }
         if(!ocOK){
-          try{
-            const mod = await import('https://cdn.skypack.dev/three@0.161.0/examples/jsm/controls/OrbitControls.js');
-            window.OrbitControls = mod.OrbitControls; ocOK=true;
-          }catch{}
+          try{ const m=await import('https://cdn.skypack.dev/three@0.161.0/examples/jsm/controls/OrbitControls.js'); window.OrbitControls=m.OrbitControls; ocOK=true; }catch{}
         }
         if(!ocOK){ HUD.textContent='Could not load OrbitControls'; return; }
 
         startApp();
       })();
 
-<<<<<<< HEAD
-    const meshes = [];
-=======
       // ----------------- App -----------------
       function startApp(){
         const THREE = window.THREE;
         const OrbitControls = window.OrbitControls || THREE.OrbitControls;
         const root = document.getElementById('app');
         const hud  = document.getElementById('hud');
->>>>>>> 19d80a1 (A3: clean header; default centered torus; single-file with CDN fallbacks)
 
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x000000);
 
-<<<<<<< HEAD
-    // ===== Default: show ONE centered torus on load =====
-    addShape(new THREE.Vector3(0,0,0), 1.6, +1);
-
-    // ===== Placement (trackpad friendly) =====
-    let placing = null; // { mesh, startY }
-=======
         const camera = new THREE.PerspectiveCamera(50, root.clientWidth/root.clientHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
         renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
         renderer.setSize(root.clientWidth, root.clientHeight);
         root.appendChild(renderer.domElement);
->>>>>>> 19d80a1 (A3: clean header; default centered torus; single-file with CDN fallbacks)
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-
-<<<<<<< HEAD
-    renderer.domElement.addEventListener('pointermove', (e)=>{
-      if (!placing) return;
-      const dy = e.clientY - placing.startY; // up → bigger, down → negative
-      let s = 1 + (-dy / 120);
-      const sign = (s >= 0) ? +1 : -1;
-      placing.mesh.material.color.set( (sign>=0) ? 0xff00aa : 0x00ff88 );
-      placing.mesh.scale.setScalar(Math.max(0.1, Math.abs(s)));
-      const p = getWorldPoint(e);
-      if (p) placing.mesh.position.copy(p);
-    });
-
-    window.addEventListener('pointerup', ()=>{ placing = null; });
-
-    // Fallback for “tap to click”: Shift + single click drops a 1× shape
-    renderer.domElement.addEventListener('click', (e)=>{
-      if (!e.shiftKey || placing) return;
-      const p = getWorldPoint(e) || new THREE.Vector3(0,0,0);
-      addShape(p, 1, +1);
-    });
-
-    // ===== Toggles =====
-    let FLICKER   = false;
-    let WIREFRAME = false;
-
-    function applyWireframe(){
-      meshes.forEach(m => m.material.wireframe = WIREFRAME);
-    }
-    function applyPattern(){
-      meshes.forEach(m => { m.material.map = USE_PATTERN ? checkerTex : null; m.material.needsUpdate = true; });
-    }
-
-    window.addEventListener('keydown', (e)=>{
-      const k = e.key.toLowerCase();
-      if (k === 'w'){ WIREFRAME = !WIREFRAME; applyWireframe(); updateHUD(); }
-      else if (k === 'f'){ FLICKER = !FLICKER; if (!FLICKER){ meshes.forEach(m => m.material.emissiveIntensity = 0); } updateHUD(); }
-      else if (k === 'p'){ USE_PATTERN = !USE_PATTERN; applyPattern(); updateHUD(); }
-      else if (k === '1'){ SHAPE_MODE = 'cube';  updateHUD(); }
-      else if (k === '2'){ SHAPE_MODE = 'sphere';updateHUD(); }
-      else if (k === '3'){ SHAPE_MODE = 'torus'; updateHUD(); }
-      else if (k === '0'){ centerCamera(); }
-      else if (k === 'r'){
-        meshes.forEach(m => scene.remove(m));
-        meshes.length = 0;
-        addShape(new THREE.Vector3(0,0,0), 1.6, +1); // keep the single centered torus after reset
-        centerCamera();
-        updateHUD();
-=======
-        function centerCamera(){
-          controls.target.set(0,0,0);
-          camera.position.set(0,0,9);
-          controls.update();
-        }
+        function centerCamera(){ controls.target.set(0,0,0); camera.position.set(0,0,9); controls.update(); }
         centerCamera();
 
         // Lights
         scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-        const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-        dir.position.set(5,8,6);
-        scene.add(dir);
+        const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(5,8,6); scene.add(dir);
 
-        // Placement helpers
+        // Placement helpers (z=0 plane)
         const placePlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
         const raycaster = new THREE.Raycaster();
         const pointer   = new THREE.Vector2();
@@ -236,10 +106,9 @@
           return raycaster.ray.intersectPlane(placePlane, p) ? p : null;
         }
 
-        // Materials / pattern
+        // Pattern/materials
         let USE_PATTERN=false, FLICKER=false, WIREFRAME=false;
-        const PINK  = '#ff2fb3';
-        const GREEN = '#00ff66';
+        const PINK='#ff2fb3', GREEN='#00ff66';
         function makeCheckerTexture(size=256, squares=8, cA=PINK, cB=GREEN){
           const cvs=document.createElement('canvas'); cvs.width=cvs.height=size;
           const ctx=cvs.getContext('2d'); const cell=size/squares;
@@ -249,7 +118,6 @@
           const tex=new THREE.CanvasTexture(cvs); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4; return tex;
         }
         const checkerTex = makeCheckerTexture();
-
         function makeMaterial(color){
           const m=new THREE.MeshStandardMaterial({
             color, metalness:0.2, roughness:0.35, emissive:0x000000,
@@ -276,18 +144,18 @@
           scene.add(mesh); meshes.push(mesh); updateHUD(); return mesh;
         }
 
-        // Default: one centered torus (as requested)
+        // Default: ONE centered torus
         addShape(new THREE.Vector3(0,0,0), 1.6, +1);
 
         // Placement (trackpad friendly)
         let placing=null;
-        renderer.domElement.addEventListener('pointerdown', (e)=>{
+        renderer.domElement.addEventListener('pointerdown',(e)=>{
           if(!e.shiftKey) return;
           const p=getWorldPoint(e) || new THREE.Vector3(0,0,0);
           const m=addShape(p,1,+1);
           placing={mesh:m,startY:e.clientY};
         });
-        renderer.domElement.addEventListener('pointermove', (e)=>{
+        renderer.domElement.addEventListener('pointermove',(e)=>{
           if(!placing) return;
           const dy=e.clientY-placing.startY; let s=1+(-dy/120);
           const sign=(s>=0)?+1:-1;
@@ -296,7 +164,7 @@
           const p=getWorldPoint(e); if(p) placing.mesh.position.copy(p);
         });
         window.addEventListener('pointerup', ()=>{ placing=null; });
-        renderer.domElement.addEventListener('click', (e)=>{
+        renderer.domElement.addEventListener('click',(e)=>{
           if(!e.shiftKey || placing) return;
           const p=getWorldPoint(e) || new THREE.Vector3(0,0,0);
           addShape(p,1,+1);
@@ -305,7 +173,6 @@
         // Keys
         function applyWire(){ meshes.forEach(m=>m.material.wireframe=WIREFRAME); }
         function applyPattern(){ meshes.forEach(m=>{ m.material.map=USE_PATTERN?checkerTex:null; m.material.needsUpdate=true; }); }
-
         window.addEventListener('keydown',(e)=>{
           const k=e.key.toLowerCase();
           if(k==='w'){ WIREFRAME=!WIREFRAME; applyWire(); updateHUD(); }
@@ -316,18 +183,15 @@
           else if(k==='3'){ SHAPE_MODE='torus'; updateHUD(); }
           else if(k==='0'){ centerCamera(); }
           else if(k==='r'){ meshes.forEach(m=>scene.remove(m)); meshes.length=0; addShape(new THREE.Vector3(0,0,0),1.6,+1); centerCamera(); updateHUD(); }
-          else if(k==='s'){
-            const a=document.createElement('a'); a.download='a3.png';
-            a.href=renderer.domElement.toDataURL('image/png'); a.click();
-          }
+          else if(k==='s'){ const a=document.createElement('a'); a.download='a3.png'; a.href=renderer.domElement.toDataURL('image/png'); a.click(); }
         });
 
         function updateHUD(){
-          hud.textContent=`shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
+          hud.textContent = `shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
         }
         updateHUD();
 
-        // Resize + animate
+        // Resize + Animate
         window.addEventListener('resize', ()=>{
           const w=root.clientWidth, h=root.clientHeight;
           camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h);
@@ -337,12 +201,11 @@
           requestAnimationFrame(animate);
           const t=clock.getElapsedTime();
           if(FLICKER){
-            const pulse=0.4+0.6*Math.max(0,Math.sin(t*6));
+            const pulse = 0.4 + 0.6*Math.max(0, Math.sin(t*6));
             meshes.forEach(m=>{ m.material.emissive=new THREE.Color(0xffffff); m.material.emissiveIntensity=pulse; });
           }
           controls.update(); renderer.render(scene,camera);
         })();
->>>>>>> 19d80a1 (A3: clean header; default centered torus; single-file with CDN fallbacks)
       }
     })();
   </script>
