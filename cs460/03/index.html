@@ -7,17 +7,12 @@
   <style>
     html,body{height:100%;margin:0;background:#000;color:#fff;font:16px system-ui,Arial}
     body{display:flex;flex-direction:column}
-    /* Sticky, readable header */
-    header{
-      position:sticky; top:0; z-index:5; text-align:center;
-      padding:12px 0 8px; background:linear-gradient(#000,#000c 60%,#0000);
-    }
+    header{position:sticky;top:0;z-index:5;text-align:center;padding:12px 0 8px;background:linear-gradient(#000,#000c 60%,#0000)}
     h1{margin:0 0 6px}
     .hint{max-width:1100px;margin:0 auto;padding:0 12px;line-height:1.3;text-shadow:0 1px 2px #000}
     kbd{padding:2px 6px;border:1px solid #888;border-bottom-width:2px;border-radius:4px;background:#111}
-    /* Canvas area fills the rest of the viewport */
-    #app{flex:1 1 auto; position:relative; min-height:360px}
-    canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+    #app{flex:1 1 auto;position:relative;min-height:360px}
+    canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
     .hud{position:fixed;left:10px;bottom:10px;background:#111b;border:1px solid #333;border-radius:8px;padding:8px 10px;font-size:13px;z-index:6}
     .err{position:fixed;right:10px;bottom:10px;background:#411;border:1px solid #833;border-radius:8px;padding:8px 10px;font-size:13px;z-index:6;display:none}
   </style>
@@ -37,7 +32,7 @@
   <div class="hud" id="hud">loading…</div>
   <div class="err" id="err"></div>
 
-  <!-- Three.js r150.1 + OrbitControls -->
+  <!-- Three.js r150.1 + OrbitControls (globals) -->
   <script src="https://unpkg.com/three@0.150.1/build/three.min.js"></script>
   <script src="https://unpkg.com/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
 
@@ -58,21 +53,22 @@
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
-    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.outputEncoding = THREE.sRGBEncoding;               // r150 sRGB fix
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
     root.appendChild(renderer.domElement);
 
     function resize(){
-      const w = root.clientWidth, h = root.clientHeight||1;
-      camera.aspect = w/h; camera.updateProjectionMatrix();
+      const w=root.clientWidth, h=root.clientHeight||1;
+      camera.aspect=w/h; camera.updateProjectionMatrix();
       renderer.setSize(w,h,false);
     }
     resize(); window.addEventListener('resize', resize);
 
-    // Controls
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    function centerCamera(){ controls.target.set(0,0,0); camera.position.set(0,0,9); controls.update(); }
+    // Controls (safe fallback if OrbitControls is unavailable)
+    const ControlsCtor = (THREE.OrbitControls || window.OrbitControls || null);
+    let controls = { enabled:true, update:()=>{} };
+    if(ControlsCtor){ controls = new ControlsCtor(camera, renderer.domElement); controls.enableDamping = true; }
+    function centerCamera(){ if(controls.target) controls.target.set(0,0,0); camera.position.set(0,0,9); controls.update(); }
     centerCamera();
 
     // Lights
@@ -86,7 +82,7 @@
       for(let y=0;y<squares;y++) for(let x=0;x<squares;x++){
         ctx.fillStyle=((x+y)%2===0)?a:b; ctx.fillRect(x*cell,y*cell,cell,cell);
       }
-      const tex=new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy=4; return tex;
+      const tex=new THREE.CanvasTexture(c); tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4; return tex;
     }
     const checker = makeChecker();
 
@@ -112,22 +108,22 @@
 
     const meshes=[];
     function updateHUD(){
-      hud.textContent = `shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
+      hud.textContent=`shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
     }
 
     function addShape(pos, scale=1, sign=+1){
-      const baseHex = (sign>=0)? new THREE.Color(PINK).getHex() : new THREE.Color(GREEN).getHex();
-      const mesh = new THREE.Mesh(geometryFor(), makeMaterial(baseHex));
-      mesh.userData.baseHex = baseHex;
+      const baseHex=(sign>=0)?new THREE.Color(PINK).getHex():new THREE.Color(GREEN).getHex();
+      const mesh=new THREE.Mesh(geometryFor(), makeMaterial(baseHex));
+      mesh.userData.baseHex=baseHex;
       mesh.position.copy(pos);
       mesh.scale.setScalar(Math.max(.1, Math.abs(scale)));
       scene.add(mesh); meshes.push(mesh); updateHUD(); return mesh;
     }
 
-    // Default centered torus
+    // Default centered torus (fully on-screen)
     const defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.4, +1);
 
-    // Placement (Shift)
+    // Placement plane + ray
     const plane=new THREE.Plane(new THREE.Vector3(0,0,1),0);
     const ray=new THREE.Raycaster(); const ndc=new THREE.Vector2();
     function toPlane(e){
@@ -138,6 +134,7 @@
       const p=new THREE.Vector3(); return ray.ray.intersectPlane(plane,p)?p:null;
     }
 
+    // Placement interactions
     let placing=null;
     function down(e){
       if(!e.shiftKey) return;
@@ -176,7 +173,6 @@
         m.material.needsUpdate=true;
       });
     }
-
     window.addEventListener('keydown',(e)=>{
       const k=e.key.toLowerCase();
       if(k==='w'){ WIREFRAME=!WIREFRAME; applyWire(); updateHUD(); }
@@ -200,7 +196,7 @@
         const pulse=.4+.6*Math.max(0,Math.sin(t*6));
         meshes.forEach(m=>{ m.material.emissive=new THREE.Color(0xffffff); m.material.emissiveIntensity=pulse; });
       }
-      controls.update();
+      controls.update && controls.update();
       renderer.render(scene,camera);
     })();
 
