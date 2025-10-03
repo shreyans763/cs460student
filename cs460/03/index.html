@@ -5,20 +5,28 @@
   <title>A3 – Final (Flicker + Wireframe)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    html,body{margin:0;height:100%;background:#000;color:#fff;font:16px system-ui,Arial}
-    header{ text-align:center; padding:14px 0 6px }
-    #app{ position:fixed; inset:0; top:98px } /* leave room for header */
-    kbd{ padding:2px 6px; border:1px solid #888; border-bottom-width:2px; border-radius:4px; background:#111 }
-    .hint{opacity:.95;text-align:center;margin:6px 12px 0; line-height:1.3}
-    .hud{ position:fixed; left:10px; bottom:10px; background:#111b; border:1px solid #333; border-radius:8px; padding:8px 10px; font-size:13px }
-    .err{ position:fixed; right:10px; bottom:10px; background:#411; border:1px solid #833; border-radius:8px; padding:8px 10px; font-size:13px; display:none }
+    html,body{height:100%;margin:0;background:#000;color:#fff;font:16px system-ui,Arial}
+    body{display:flex;flex-direction:column}
+    /* Sticky, readable header */
+    header{
+      position:sticky; top:0; z-index:5; text-align:center;
+      padding:12px 0 8px; background:linear-gradient(#000,#000c 60%,#0000);
+    }
+    h1{margin:0 0 6px}
+    .hint{max-width:1100px;margin:0 auto;padding:0 12px;line-height:1.3;text-shadow:0 1px 2px #000}
+    kbd{padding:2px 6px;border:1px solid #888;border-bottom-width:2px;border-radius:4px;background:#111}
+    /* Canvas area fills the rest of the viewport */
+    #app{flex:1 1 auto; position:relative; min-height:360px}
+    canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+    .hud{position:fixed;left:10px;bottom:10px;background:#111b;border:1px solid #333;border-radius:8px;padding:8px 10px;font-size:13px;z-index:6}
+    .err{position:fixed;right:10px;bottom:10px;background:#411;border:1px solid #833;border-radius:8px;padding:8px 10px;font-size:13px;z-index:6;display:none}
   </style>
 </head>
 <body>
   <header>
     <h1>A3 – Final (Flicker + Wireframe)</h1>
     <div class="hint">
-      <strong>Place/scale:</strong> hold <kbd>Shift</kbd> and press/hold mouse/trackpad, drag up/down to scale (color flips by sign).
+      <strong>Place/scale:</strong> hold <kbd>Shift</kbd> then click-drag up/down to scale (color flips by sign).
       <strong>Keys:</strong> <kbd>F</kbd> flicker, <kbd>W</kbd> wireframe, <kbd>P</kbd> pattern on/off (green/pink),
       <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> cube/sphere/torus, <kbd>0</kbd> center camera, <kbd>R</kbd> reset, <kbd>S</kbd> save PNG.
       <br><small>(Tip: Shift + single click also drops a shape.)</small>
@@ -29,17 +37,16 @@
   <div class="hud" id="hud">loading…</div>
   <div class="err" id="err"></div>
 
-  <!-- Three.js r150.1 (works reliably) -->
+  <!-- Three.js r150.1 + OrbitControls -->
   <script src="https://unpkg.com/three@0.150.1/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
+
   <script>
   (function(){
     const root = document.getElementById('app');
     const hud  = document.getElementById('hud');
     const err  = document.getElementById('err');
-
-    function showErr(msg){ console.error(msg); err.textContent=msg; err.style.display='block'; }
-
-    if (!window.THREE){ showErr('Three.js failed to load.'); return; }
+    if(!window.THREE){ err.textContent='three.js failed to load'; err.style.display='block'; return; }
     const THREE = window.THREE;
 
     const PINK  = '#ff2fb3';
@@ -50,40 +57,38 @@
     scene.background = new THREE.Color(0x000000);
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-    const centerCamera = ()=>{ camera.position.set(0,0,9); };
-    centerCamera();
-
     const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
-    // r150 uses *.encoding, not colorSpace
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
     root.appendChild(renderer.domElement);
 
     function resize(){
-      const w=root.clientWidth, h=root.clientHeight||1;
-      camera.aspect=w/h; camera.updateProjectionMatrix();
+      const w = root.clientWidth, h = root.clientHeight||1;
+      camera.aspect = w/h; camera.updateProjectionMatrix();
       renderer.setSize(w,h,false);
     }
     resize(); window.addEventListener('resize', resize);
 
+    // Controls
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    function centerCamera(){ controls.target.set(0,0,0); camera.position.set(0,0,9); controls.update(); }
+    centerCamera();
+
     // Lights
     scene.add(new THREE.AmbientLight(0xffffff, .65));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-    dir.position.set(5,8,6); scene.add(dir);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(5,8,6); scene.add(dir);
 
-    // Checker (pink + green) — correct for r150
+    // Checker (pink/green)
     function makeChecker(size=256, squares=8, a=PINK, b=GREEN){
       const c=document.createElement('canvas'); c.width=c.height=size;
       const ctx=c.getContext('2d'); const cell=size/squares;
       for(let y=0;y<squares;y++) for(let x=0;x<squares;x++){
         ctx.fillStyle=((x+y)%2===0)?a:b; ctx.fillRect(x*cell,y*cell,cell,cell);
       }
-      const tex=new THREE.CanvasTexture(c);
-      tex.encoding = THREE.sRGBEncoding;
-      tex.anisotropy = 4;
-      return tex;
+      const tex=new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy=4; return tex;
     }
-    const checkerTex = makeChecker();
+    const checker = makeChecker();
 
     // Materials
     let WIREFRAME=false, FLICKER=false, USE_PATTERN=false;
@@ -91,7 +96,7 @@
       const m=new THREE.MeshStandardMaterial({
         color: USE_PATTERN ? 0xffffff : baseHex,
         metalness:.2, roughness:.35,
-        map: USE_PATTERN ? checkerTex : null
+        map: USE_PATTERN ? checker : null
       });
       m.wireframe = WIREFRAME;
       return m;
@@ -100,30 +105,29 @@
     // Shapes
     let SHAPE_MODE='torus';
     function geometryFor(){
-      if (SHAPE_MODE==='cube')   return new THREE.BoxGeometry(1.4,1.4,1.4,2,2,2);
-      if (SHAPE_MODE==='sphere') return new THREE.SphereGeometry(0.9,36,24);
+      if(SHAPE_MODE==='cube')   return new THREE.BoxGeometry(1.4,1.4,1.4,2,2,2);
+      if(SHAPE_MODE==='sphere') return new THREE.SphereGeometry(0.9,36,24);
       return new THREE.TorusKnotGeometry(0.8,0.22,160,24);
     }
 
     const meshes=[];
     function updateHUD(){
-      hud.textContent=`shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
+      hud.textContent = `shapes: ${meshes.length} • mode: ${SHAPE_MODE} • pattern: ${USE_PATTERN?'on':'off'} • wire: ${WIREFRAME?'on':'off'} • flicker: ${FLICKER?'on':'off'}`;
     }
 
     function addShape(pos, scale=1, sign=+1){
-      const baseHex=(sign>=0)?new THREE.Color(PINK).getHex():new THREE.Color(GREEN).getHex();
-      const mesh=new THREE.Mesh(geometryFor(), makeMaterial(baseHex));
-      mesh.userData.baseHex=baseHex;
+      const baseHex = (sign>=0)? new THREE.Color(PINK).getHex() : new THREE.Color(GREEN).getHex();
+      const mesh = new THREE.Mesh(geometryFor(), makeMaterial(baseHex));
+      mesh.userData.baseHex = baseHex;
       mesh.position.copy(pos);
       mesh.scale.setScalar(Math.max(.1, Math.abs(scale)));
-      scene.add(mesh); meshes.push(mesh); updateHUD();
-      return mesh;
+      scene.add(mesh); meshes.push(mesh); updateHUD(); return mesh;
     }
 
-    // Default, centered (slightly smaller so it’s fully visible)
-    const defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.2, +1);
+    // Default centered torus
+    const defaultMesh = addShape(new THREE.Vector3(0,0,0), 1.4, +1);
 
-    // Placement on z=0 plane with SHIFT
+    // Placement (Shift)
     const plane=new THREE.Plane(new THREE.Vector3(0,0,1),0);
     const ray=new THREE.Raycaster(); const ndc=new THREE.Vector2();
     function toPlane(e){
@@ -131,48 +135,43 @@
       ndc.x=((e.clientX-r.left)/r.width)*2-1;
       ndc.y=-((e.clientY-r.top)/r.height)*2+1;
       ray.setFromCamera(ndc,camera);
-      const p=new THREE.Vector3();
-      return ray.ray.intersectPlane(plane,p)?p:null;
+      const p=new THREE.Vector3(); return ray.ray.intersectPlane(plane,p)?p:null;
     }
 
-    let placing=null; // {mesh,startY}
-    function startPlace(e){
+    let placing=null;
+    function down(e){
       if(!e.shiftKey) return;
+      controls.enabled=false;
       const p=toPlane(e)||new THREE.Vector3();
       const m=addShape(p,1,+1);
       placing={mesh:m,startY:e.clientY};
       e.preventDefault();
     }
-    function movePlace(e){
+    function move(e){
       if(!placing) return;
       const dy=e.clientY-placing.startY;
       let s=1+(-dy/120);
       const sign=(s>=0)?+1:-1;
       placing.mesh.userData.baseHex=(sign>=0)?new THREE.Color(PINK).getHex():new THREE.Color(GREEN).getHex();
-      if (USE_PATTERN){
-        placing.mesh.material.color.set(0xffffff);
-        placing.mesh.material.map=checkerTex;
-        placing.mesh.material.needsUpdate=true;
-      }else{
-        placing.mesh.material.map=null;
-        placing.mesh.material.color.setHex(placing.mesh.userData.baseHex);
-      }
+      if(USE_PATTERN){ placing.mesh.material.color.set(0xffffff); placing.mesh.material.map=checker; }
+      else{ placing.mesh.material.map=null; placing.mesh.material.color.setHex(placing.mesh.userData.baseHex); }
+      placing.mesh.material.needsUpdate=true;
       placing.mesh.scale.setScalar(Math.max(.1, Math.abs(s)));
       const p=toPlane(e); if(p) placing.mesh.position.copy(p);
     }
-    function endPlace(){ placing=null; }
+    function up(){ placing=null; controls.enabled=true; }
 
     const el=renderer.domElement;
-    el.addEventListener('pointerdown', startPlace);
-    el.addEventListener('pointermove', movePlace);
-    window.addEventListener('pointerup', endPlace);
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
     el.addEventListener('click',(e)=>{ if(!e.shiftKey||placing) return; const p=toPlane(e)||new THREE.Vector3(); addShape(p,1,+1); });
 
     // Toggles
     function applyWire(){ meshes.forEach(m=>m.material.wireframe=WIREFRAME); }
     function applyPattern(){
       meshes.forEach(m=>{
-        if(USE_PATTERN){ m.material.color.set(0xffffff); m.material.map=checkerTex; }
+        if(USE_PATTERN){ m.material.color.set(0xffffff); m.material.map=checker; }
         else{ m.material.map=null; m.material.color.setHex(m.userData.baseHex||new THREE.Color(PINK).getHex()); }
         m.material.needsUpdate=true;
       });
@@ -187,20 +186,21 @@
       else if(k==='2'){ SHAPE_MODE='sphere';updateHUD(); }
       else if(k==='3'){ SHAPE_MODE='torus'; updateHUD(); }
       else if(k==='0'){ centerCamera(); }
-      else if(k==='r'){ meshes.forEach(m=>scene.remove(m)); meshes.length=0; addShape(new THREE.Vector3(0,0,0),1.2,+1); centerCamera(); updateHUD(); }
+      else if(k==='r'){ meshes.forEach(m=>scene.remove(m)); meshes.length=0; addShape(new THREE.Vector3(0,0,0),1.4,+1); centerCamera(); updateHUD(); }
       else if(k==='s'){ const a=document.createElement('a'); a.download='a3.png'; a.href=renderer.domElement.toDataURL('image/png'); a.click(); }
     });
 
-    // Animate (+ flicker)
+    // Animate
     const clock=new THREE.Clock();
-    (function loop(){
-      requestAnimationFrame(loop);
+    (function tick(){
+      requestAnimationFrame(tick);
       const t=clock.getElapsedTime();
       if(defaultMesh){ defaultMesh.rotation.y=t*.35; defaultMesh.rotation.x=t*.15; }
       if(FLICKER){
         const pulse=.4+.6*Math.max(0,Math.sin(t*6));
         meshes.forEach(m=>{ m.material.emissive=new THREE.Color(0xffffff); m.material.emissiveIntensity=pulse; });
       }
+      controls.update();
       renderer.render(scene,camera);
     })();
 
