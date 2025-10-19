@@ -7,13 +7,14 @@
   <style>
     html,body{height:100%;margin:0}
     body{
+      /* ✅ BG image from spec */
       background:url('https://cs460.org/assignments/04/bg.jpg') center/cover no-repeat fixed;
       font:15px/1.35 system-ui, Arial, sans-serif; color:#fff;
     }
     header{position:fixed;inset:0 0 auto 0;text-align:center;padding:10px 8px;
       background:linear-gradient(#0009,#0000);backdrop-filter:blur(2px)}
     #hud{position:fixed;left:10px;bottom:10px;background:#0008;padding:6px 9px;border-radius:8px}
-    #help{position:fixed;right:10px;bottom:10px;background:#0008;padding:6px 9px;border-radius:8px;max-width:48ch}
+    #help{position:fixed;right:10px;bottom:10px;background:#0008;padding:6px 9px;border-radius:8px;max-width:56ch}
     canvas{display:block;width:100%;height:100%}
     small{opacity:.85}
     kbd{background:#fff2;color:#fff;padding:1px 5px;border-radius:4px}
@@ -22,15 +23,16 @@
 <body>
   <header>
     <strong>Assignment 4 – Flashy Fish!</strong>
-    <small>Triangles for fish, POINT for eye, 100+ fish, transform matrix (translate+rotate+scale with flip), blending, background.</small>
+    <small>Triangles for fish, POINT eye, 100+ fish, transform matrix (translate+rotate+scale with flip), blending, background.</small>
   </header>
   <canvas id="gl"></canvas>
   <div id="hud">loading…</div>
   <div id="help">
-    <div><b>Controls (red fish):</b></div>
-    <div><kbd>←</kbd>/<kbd>→</kbd> direction &nbsp; <kbd>↑</kbd>/<kbd>↓</kbd> front/back (scale)</div>
-    <div><kbd>Space</kbd> pause &nbsp; <kbd>+</kbd>/<kbd>-</kbd> add/remove fish</div>
-    <div><kbd>R</kbd> reset red fish &nbsp; <kbd>H</kbd> toggle this help</div>
+    <div><b>Bonus Controls</b></div>
+    <div><kbd>M</kbd> toggle mouse-follow for red fish (auto anim still runs)</div>
+    <div><kbd>Click</kbd> scatter the school &nbsp; <kbd>Space</kbd> pause</div>
+    <div><kbd>←</kbd>/<kbd>→</kbd> face left/right, <kbd>↑</kbd>/<kbd>↓</kbd> front/back (scale)</div>
+    <div><kbd>+</kbd>/<kbd>-</kbd> add/remove fish &nbsp; <kbd>R</kbd> reset red fish &nbsp; <kbd>H</kbd> hide help</div>
   </div>
 
   <script>
@@ -51,8 +53,8 @@
   // ---------- Shaders ----------
   const VERT = `
     attribute vec3 a_position;
-    uniform mat4 u_transform;
-    uniform float u_pointsize;
+    uniform mat4 u_transform;   // 4x4 transform (T*R*S) required by spec
+    uniform float u_pointsize;  // for POINT eye
     void main(void){
       gl_Position = u_transform * vec4(a_position, 1.0);
       gl_PointSize = u_pointsize;
@@ -60,19 +62,19 @@
   `;
   const FRAG = `
     precision mediump float;
-    uniform vec4 u_color;
+    uniform vec4 u_color;       // RGBA; alpha for blending
     void main(void){ gl_FragColor = u_color; }
   `;
 
-  function sh(type, src){
+  function makeShader(type, src){
     const s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);
     if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
     return s;
   }
   const prog = gl.createProgram();
-  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
-  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+  gl.attachShader(prog, makeShader(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(prog, makeShader(gl.FRAGMENT_SHADER, FRAG));
   gl.linkProgram(prog);
   if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
@@ -82,7 +84,7 @@
   const u_transform = gl.getUniformLocation(prog, 'u_transform');
   const u_pointsize = gl.getUniformLocation(prog, 'u_pointsize');
 
-  // ---------- Geometry ----------
+  // ---------- Geometry (7 verts, 5 triangles) ----------
   const FISH_VERTS = new Float32Array([
      0.5,  0.0, 0.0,   // 0 nose
      0.2,  0.25,0.0,   // 1 upper body
@@ -93,7 +95,7 @@
      0.2, -0.25,0.0    // 6 lower body
   ]);
   const FISH_INDEX = new Uint8Array([ 0,1,6,  1,2,6,  2,5,6,  2,3,5,  3,4,5 ]);
-  const EYE_POS = new Float32Array([0.2, 0.2, 0.0]);
+  const EYE_POS = new Float32Array([0.2, 0.2, 0.0]); // POINT eye
 
   function makeFish(color=[1,0,0,0.7], offset=[0,0,0], scale=1, dir=1){
     const vbuf = gl.createBuffer();
@@ -111,39 +113,45 @@
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
+    // phase/speed for smooth independent motion
     const phase = Math.random()*Math.PI*2;
     const speed = 0.30 + Math.random()*0.30;    // units/sec
-    return [vbuf, ibuf, eyebuf, new Float32Array(color), new Float32Array(offset), scale, dir, phase, speed];
+
+    // bonus: per-fish burst velocity + timer (for click scatter)
+    const vx = 0, vy = 0, burstT = 0;
+
+    // record layout:
+    // 0 vbuf, 1 ibuf, 2 eyebuf, 3 color(Float32), 4 offset(Float32),
+    // 5 scale, 6 dir, 7 phase, 8 speed, 9 vx, 10 vy, 11 burstT
+    return [vbuf, ibuf, eyebuf, new Float32Array(color), new Float32Array(offset),
+            scale, dir, phase, speed, vx, vy, burstT];
   }
 
   // ---------- Scene ----------
-  const fish = [];
-  fish.push(makeFish([1,0,0,0.7], [0,0,0], 1.0, -1)); // big red flipped
+  const school = [];
+  // big red fish (flipped)
+  school.push(makeFish([1,0,0,0.7], [0,0,0], 1.0, -1));
+  // 100+ small random fish
   for(let i=0;i<120;i++){
     const c = [0.35+0.2*Math.random(), 0.6+0.25*Math.random(), 0.85+0.15*Math.random(), 0.35+0.55*Math.random()];
     const o = [ (Math.random()*2-1)*1.1, (Math.random()*2-1)*0.8, 0 ];
     const s = 0.15 + Math.random()*0.30;
-    fish.push(makeFish(c, o, s, 1));
+    school.push(makeFish(c, o, s, Math.random()<0.85?1:-1));
   }
 
-  function addRandomFish(n=10){
-    for(let i=0;i<n && fish.length<320;i++){
+  function addRandomFish(n=12){
+    for(let i=0;i<n && school.length<360;i++){
       const c = [0.35+0.2*Math.random(), 0.6+0.25*Math.random(), 0.85+0.15*Math.random(), 0.35+0.55*Math.random()];
       const o = [ (Math.random()*2-1)*1.1, (Math.random()*2-1)*0.8, 0 ];
       const s = 0.15 + Math.random()*0.30;
-      fish.push(makeFish(c, o, s, Math.random()<0.5?1:-1));
+      school.push(makeFish(c, o, s, Math.random()<0.5?1:-1));
     }
   }
-  function removeFish(n=10){
-    fish.splice(Math.max(1, fish.length-n), n); // keep the red fish at index 0
-  }
+  function removeFish(n=12){ school.splice(Math.max(1, school.length-n), n); } // keep red
+
   function resetRed(){
-    const r = fish[0];
-    r[4][0] = 0; r[4][1] = 0;  // offset
-    r[5] = 1.0;                // scale
-    r[6] = -1;                 // direction
-    r[7] = 0;                  // phase
-    r[8] = 0.35;               // speed
+    const r = school[0];
+    r[4][0]=0; r[4][1]=0; r[5]=1.0; r[6]=-1; r[7]=0; r[8]=0.35; r[9]=r[10]=0; r[11]=0;
   }
 
   function bindTri(vbuf, ibuf){
@@ -161,7 +169,7 @@
     gl.drawArrays(gl.POINTS, 0, 1);
   }
 
-  // ---------- Render loop ----------
+  // ---------- Blending (spec) ----------
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.disable(gl.DEPTH_TEST);
@@ -169,22 +177,45 @@
   const hud  = document.getElementById('hud');
   const help = document.getElementById('help');
 
-  const state = { paused:false, showHelp:true };
-  let last = performance.now();
+  // ---------- Bonus: keyboard + mouse ----------
+  const state = { paused:false, showHelp:true, mouseFollow:false };
+  const pointer = { x:0, y:0 }; // NDC coords for follow
 
-  addEventListener('keydown', (e) => {
-    const r = fish[0];
-    if (e.key === ' ') { state.paused = !state.paused; return; }
-    if (e.key === 'ArrowLeft')  { r[6] = -1; return; }      // face left
-    if (e.key === 'ArrowRight') { r[6] =  1; return; }      // face right
-    if (e.key === 'ArrowUp')    { r[5] = Math.min(2.5, r[5]*1.06); return; }   // closer (front)
-    if (e.key === 'ArrowDown')  { r[5] = Math.max(0.35, r[5]*0.94); return; }  // farther (back)
-    if (e.key === '+' || e.key === '=') { addRandomFish(10); return; }
-    if (e.key === '-' || e.key === '_') { removeFish(10); return; }
-    if (e.key === 'r' || e.key === 'R') { resetRed(); return; }
-    if (e.key === 'h' || e.key === 'H') { state.showHelp = !state.showHelp; help.style.display = state.showHelp?'':'none'; }
+  addEventListener('mousemove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const nx = ( (e.clientX - r.left) / r.width ) * 2 - 1;
+    const ny = - ( (e.clientY - r.top) / r.height ) * 2 + 1;
+    pointer.x = nx; pointer.y = ny;
   });
 
+  addEventListener('click', () => {
+    // scatter school (set burst velocity + timer on small fish)
+    for (let i=1;i<school.length;i++){
+      const f = school[i];
+      f[9]  = (Math.random()*2-1) * 2.0;  // vx
+      f[10] = (Math.random()*2-1) * 2.0;  // vy
+      f[11] = 0.7;                        // burst timer (s)
+    }
+  });
+
+  addEventListener('keydown', (e) => {
+    const r = school[0];
+    if (e.key === ' ') { state.paused = !state.paused; return; }
+    if (e.key === 'h' || e.key === 'H') { state.showHelp = !state.showHelp; help.style.display = state.showHelp?'':'none'; return; }
+    if (e.key === 'm' || e.key === 'M') { state.mouseFollow = !state.mouseFollow; return; }
+
+    if (e.key === 'ArrowLeft')  { r[6] = -1; return; }      // face left
+    if (e.key === 'ArrowRight') { r[6] =  1; return; }      // face right
+    if (e.key === 'ArrowUp')    { r[5] = Math.min(2.6, r[5]*1.06); return; }   // front (bigger)
+    if (e.key === 'ArrowDown')  { r[5] = Math.max(0.35, r[5]*0.94); return; }  // back  (smaller)
+
+    if (e.key === '+' || e.key === '=') { addRandomFish(12); return; }
+    if (e.key === '-' || e.key === '_') { removeFish(12);   return; }
+    if (e.key === 'r' || e.key === 'R') { resetRed();       return; }
+  });
+
+  // ---------- Render loop ----------
+  let last = performance.now();
   function animate(now = performance.now()){
     const dt = state.paused ? 0 : Math.min(0.05, (now - last)/1000);
     last = now;
@@ -193,8 +224,8 @@
     gl.clearColor(0,0,0,0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    for (let i=0; i<fish.length; i++){
-      const r = fish[i];
+    for (let i=0; i<school.length; i++){
+      const r = school[i];
       const vbuf = r[0], ibuf = r[1], eyebuf = r[2];
       let   color = r[3];
       const off   = r[4];
@@ -202,16 +233,35 @@
       const dir   = r[6];
       const phase = r[7];
       const spd   = r[8];
+      let   vx    = r[9], vy = r[10], burstT = r[11];
 
-      // movement
-      off[0] += (spd * dt) * dir;
-      off[1] += 0.25 * Math.sin(2.0*t + phase) * dt;
+      // --- automatic motion (spec) + bonus controls ---
+      if (i === 0 && state.mouseFollow) {
+        // smooth follow of mouse for the red fish
+        const k = 3.2; // follow stiffness
+        off[0] += (pointer.x - off[0]) * Math.min(1, k*dt);
+        off[1] += (pointer.y - off[1]) * Math.min(1, k*dt);
+        r[6] = (pointer.x >= off[0]) ? 1 : -1;  // face toward pointer
+      } else {
+        // base drift and wiggle for everyone
+        off[0] += (spd * dt) * dir;
+        off[1] += 0.25 * Math.sin(2.0*t + phase) * dt;
+      }
 
-      // wrap both axes so nobody disappears forever
+      // scatter burst (decays)
+      if (burstT > 0) {
+        off[0] += vx * dt;
+        off[1] += vy * dt;
+        r[11] = burstT - dt;
+        r[9] = vx *= (1 - 1.5*dt);  // damp quickly
+        r[10]= vy *= (1 - 1.5*dt);
+      }
+
+      // wrap bounds so fish re-enter
       if (off[0] >  1.25) off[0] = -1.25;
       if (off[0] < -1.25) off[0] =  1.25;
-      if (off[1] >  1.00) off[1] = -1.00;
-      if (off[1] < -1.00) off[1] =  1.00;
+      if (off[1] >  1.05) off[1] = -1.05;
+      if (off[1] < -1.05) off[1] =  1.05;
 
       // alpha pulse for small fish
       if (i !== 0) {
@@ -220,18 +270,18 @@
         r[3] = color;
       }
 
-      // correct column-major matrix:  T * R * (FlipX*Scale)
+      // --- correct column-major transform: T * R * (FlipX*Scale) ---
       const theta = 0.08 * Math.sin(3.0*t + phase);
       const c = Math.cos(theta), s = Math.sin(theta);
-      const sx = scale * dir;   // flip on X when dir = -1
+      const sx = scale * dir;   // flip X when dir=-1
       const sy = scale;
 
-      // a b 0 0
-      // c d 0 0
-      // 0 0 1 0
-      // tx ty 0 1  (column-major)
+      // [ a11 a12 0 0 ]
+      // [ a21 a22 0 0 ]
+      // [  0   0  1 0 ]
+      // [ tx  ty  0 1 ]  // column-major in Float32Array
       const a11 = sx * c;
-      const a21 = sx * s;
+      const a21 = sx * s;   // ← important: this is the Y component of first column
       const a12 = -sy * s;
       const a22 =  sy * c;
 
@@ -250,7 +300,7 @@
       drawEye(eyebuf, scale*20.0, [0,0,0,0.55]);
     }
 
-    hud.textContent = \`fish: \${fish.length}  \${state.paused ? '(paused)' : ''}\`;
+    hud.textContent = `fish: ${school.length}  ${state.paused ? '(paused)' : ''}  ${state.mouseFollow ? '• mouse-follow' : ''}`;
     requestAnimationFrame(animate);
   }
   requestAnimationFrame(animate);
