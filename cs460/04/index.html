@@ -7,257 +7,201 @@
   <style>
     html,body{height:100%;margin:0}
     body{
-      /* A4: background image + cover */
-      background: url('https://cs460.org/assignments/04/bg.jpg');
-      background-size: cover;
-      background-position:center;
-      font: 15px/1.3 system-ui, Arial, sans-serif;
-      color:#fff;
+      background:url('https://cs460.org/assignments/04/bg.jpg') center/cover no-repeat fixed;
+      font:15px/1.35 system-ui, Arial, sans-serif; color:#fff;
     }
-    header{position:fixed;left:0;right:0;top:0;text-align:center;padding:10px 8px;
-      background:linear-gradient(#0009,#0000);backdrop-filter: blur(2px)}
+    header{position:fixed;inset:0 0 auto 0;text-align:center;padding:10px 8px;
+      background:linear-gradient(#0009,#0000);backdrop-filter:blur(2px)}
     #hud{position:fixed;left:10px;bottom:10px;background:#0008;padding:6px 9px;border-radius:8px}
-    canvas{display:block;width:100%;height:100%;}
-    small{opacity:.8}
+    canvas{display:block;width:100%;height:100%}
+    small{opacity:.85}
   </style>
 </head>
 <body>
   <header>
     <strong>Assignment 4 – Flashy Fish!</strong>
-    <small>Triangles for fish, POINT for eye, 100+ fish, transform matrix (translate+rotate+scale), blend, background.</small>
+    <small>Triangles for fish, POINT for eye, 100+ fish, transform matrix (translate+rotate+scale with flip), blending, background.</small>
   </header>
   <canvas id="gl"></canvas>
   <div id="hud">loading…</div>
 
   <script>
-  // ====== WebGL setup ======
+  // ---------- WebGL setup ----------
   const canvas = document.getElementById('gl');
   const gl = canvas.getContext('webgl', {alpha:true, antialias:true});
-  if(!gl){ alert('WebGL not supported'); }
+  if(!gl) { alert('WebGL not supported'); }
 
   function resize(){
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const w = Math.floor(window.innerWidth  * dpr);
-    const h = Math.floor(window.innerHeight * dpr);
+    const w = Math.floor(innerWidth  * dpr);
+    const h = Math.floor(innerHeight * dpr);
     canvas.width = w; canvas.height = h;
     gl.viewport(0,0,w,h);
   }
   resize(); addEventListener('resize', resize);
 
-  // ====== Shaders (A4 requirements) ======
+  // ---------- Shaders ----------
   const VERT = `
     attribute vec3 a_position;
-
-    uniform mat4 u_transform;   // 4x4 transform: translate + rotate + scale
-    uniform float u_pointsize;  // eye size
-
+    uniform mat4 u_transform;
+    uniform float u_pointsize;
     void main(void){
       gl_Position = u_transform * vec4(a_position, 1.0);
-      gl_PointSize = u_pointsize;  // used when drawing POINTS (eye)
+      gl_PointSize = u_pointsize;
     }
   `;
-
   const FRAG = `
     precision mediump float;
-    uniform vec4 u_color;       // RGBA color (with alpha for blending)
-    void main(void){
-      gl_FragColor = u_color;
-    }
+    uniform vec4 u_color;
+    void main(void){ gl_FragColor = u_color; }
   `;
 
-  function compile(type, src){
-    const sh = gl.createShader(type);
-    gl.shaderSource(sh, src);
-    gl.compileShader(sh);
-    if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)){
-      throw new Error(gl.getShaderInfoLog(sh));
-    }
-    return sh;
+  function sh(type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
   }
   const prog = gl.createProgram();
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
   gl.linkProgram(prog);
-  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
-    throw new Error(gl.getProgramInfoLog(prog));
-  }
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
 
-  // Locations
-  const a_position   = gl.getAttribLocation(prog, 'a_position');
-  const u_color      = gl.getUniformLocation(prog, 'u_color');
-  const u_transform  = gl.getUniformLocation(prog, 'u_transform');
-  const u_pointsize  = gl.getUniformLocation(prog, 'u_pointsize');
+  const a_position  = gl.getAttribLocation(prog, 'a_position');
+  const u_color     = gl.getUniformLocation(prog, 'u_color');
+  const u_transform = gl.getUniformLocation(prog, 'u_transform');
+  const u_pointsize = gl.getUniformLocation(prog, 'u_pointsize');
 
-  // ====== Fish geometry (from the PDF) ======
-  // 7 vertices (nose, body, tail base/tips), 5 triangles (15 indices)
+  // ---------- Geometry (7 verts, 5 triangles) ----------
   const FISH_VERTS = new Float32Array([
-     0.5,  0.0, 0.0,   // 0: nose
-     0.2,  0.25, 0.0,  // 1: upper body
-    -0.2,  0.15, 0.0,  // 2: upper tail base
-    -0.4,  0.3, 0.0,   // 3: upper tail tip
-    -0.4, -0.3, 0.0,   // 4: lower tail tip
-    -0.2, -0.15, 0.0,  // 5: lower tail base
-     0.2, -0.25, 0.0   // 6: lower body
+     0.5,  0.0, 0.0,   // 0 nose
+     0.2,  0.25,0.0,   // 1 upper body
+    -0.2,  0.15,0.0,   // 2 upper tail base
+    -0.4,  0.3, 0.0,   // 3 upper tail tip
+    -0.4, -0.3, 0.0,   // 4 lower tail tip
+    -0.2, -0.15,0.0,   // 5 lower tail base
+     0.2, -0.25,0.0    // 6 lower body
   ]);
   const FISH_INDEX = new Uint8Array([
-    0, 1, 6,   // main body
-    1, 2, 6,   // upper mid-body
-    2, 5, 6,   // rear body
-    2, 3, 5,   // tail top
-    3, 4, 5    // tail fin
+    0,1,6,  1,2,6,  2,5,6,  2,3,5,  3,4,5
   ]);
-  const FISH_EYE_POS_DEFAULT = new Float32Array([0.2, 0.2, 0.0]); // will flip Y when direction = -1
+  const EYE_POS = new Float32Array([0.2, 0.2, 0.0]);
 
-  // ====== Helper: create one fish ======
-  // Returns [v_buffer, i_buffer, eye_v_buffer, color, offset, scale, direction]
-  function createFish(color=[1,0,0,0.7], offset=[0,0,0], scale=1, direction=1){
-    // vertex buffer (positions)
+  function makeFish(color=[1,0,0,0.7], offset=[0,0,0], scale=1, dir=1){
     const vbuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbuf);
     gl.bufferData(gl.ARRAY_BUFFER, FISH_VERTS, gl.STATIC_DRAW);
 
-    // index buffer (triangles)
     const ibuf = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, FISH_INDEX, gl.STATIC_DRAW);
 
-    // eye position (flip y if direction is -1)
-    const eyePos = (direction === -1)
-      ? new Float32Array([0.2,-0.2,0.0])
-      : new Float32Array(FISH_EYE_POS_DEFAULT);
-
     const eyebuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, eyebuf);
-    gl.bufferData(gl.ARRAY_BUFFER, eyePos, gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, EYE_POS, gl.STATIC_DRAW);
 
-    // unbind
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
-    // return the fish “record” as an array to match assignment style
-    return [vbuf, ibuf, eyebuf, new Float32Array(color), new Float32Array(offset), scale, direction];
+    // phase & speed for smooth wiggle
+    const phase = Math.random()*Math.PI*2;
+    const speed = 0.25 + Math.random()*0.35; // units/sec
+    return [vbuf, ibuf, eyebuf, new Float32Array(color), new Float32Array(offset), scale, dir, phase, speed];
   }
 
-  // ====== Scene setup ======
-  const all_fish = [];
-
-  // Big red fish, direction = -1 (flipped)
-  all_fish.push( createFish([1,0,0,0.7], [0,0,0], 1.0, -1) );
-
-  // Many small random fish
-  for(let i=0;i<100;i++){
-    const random_color  = [Math.random(), Math.random(), Math.random(), Math.random()];
-    const random_offset = [ (Math.random()-Math.random()), (Math.random()-Math.random()), 0 ];
-    const random_scale  = Math.random()*0.3 + 0.15; // keep them visible
-    all_fish.push( createFish(random_color, random_offset, random_scale, 1) );
+  // ---------- Scene ----------
+  const fish = [];
+  // big red (flipped)
+  fish.push(makeFish([1,0,0,0.7], [0,0,0], 1.0, -1));
+  // 100+ small random fish
+  for(let i=0;i<120;i++){
+    const c = [0.35+0.2*Math.random(), 0.6+0.25*Math.random(), 0.85+0.15*Math.random(), 0.35+0.55*Math.random()];
+    const o = [ (Math.random()*2-1)*1.1, (Math.random()*2-1)*0.8, 0 ];
+    const s = 0.15 + Math.random()*0.30;
+    fish.push(makeFish(c, o, s, 1));
   }
 
-  // ====== Utilities: set up to draw a fish ======
-  function bindFishBuffers(vbuf, ibuf){
+  function bindTri(vbuf, ibuf){
     gl.bindBuffer(gl.ARRAY_BUFFER, vbuf);
     gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(a_position);
-
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf);
   }
 
-  function drawFishTriangles(){
-    // 5 triangles * 3 vertices = 15 indices
-    gl.drawElements(gl.TRIANGLES, 15, gl.UNSIGNED_BYTE, 0);
-  }
-
-  function drawFishEye(eyebuf, pointSize, eyeColor=[0,0,0,0.5]){
-    gl.uniform4fv(u_color, new Float32Array(eyeColor));
-    gl.uniform1f(u_pointsize, pointSize);
-
+  function drawEye(eyebuf, size, col=[0,0,0,0.55]){
+    gl.uniform4fv(u_color, new Float32Array(col));
+    gl.uniform1f(u_pointsize, size);
     gl.bindBuffer(gl.ARRAY_BUFFER, eyebuf);
     gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(a_position);
-
     gl.drawArrays(gl.POINTS, 0, 1);
   }
 
-  // ====== Animation ======
-  const hud = document.getElementById('hud');
+  // ---------- Render loop (with fixed movement) ----------
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.disable(gl.DEPTH_TEST);
 
-  function animate(){
-    // Transparent clear so the CSS background shows
+  const hud = document.getElementById('hud');
+  let last = performance.now();
+
+  function animate(now = performance.now()){
+    const dt = Math.min(0.05, (now - last)/1000); // clamp for stability
+    last = now;
+    const t = now * 0.001;
+
     gl.clearColor(0,0,0,0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    // A4: Enable blending for transparency
-    gl.enable(gl.BLEND);
-    gl.blendEquation(gl.FUNC_ADD);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.disable(gl.DEPTH_TEST);
+    for (let i=0; i<fish.length; i++){
+      const r = fish[i];
+      const vbuf = r[0], ibuf = r[1], eyebuf = r[2];
+      let   color = r[3];
+      const off   = r[4];
+      const scale = r[5];
+      const dir   = r[6];
+      const phase = r[7];
+      const spd   = r[8];
 
-    const t  = performance.now()*0.001;
+      // --- movement (FIXED) ---
+      off[0] += (spd * dt) * dir;                          // move with direction
+      off[1] += 0.25 * Math.sin(2.0*t + phase) * dt;       // smooth wiggle
+      // wrap around horizontally
+      if (off[0] >  1.25) off[0] = -1.25;
+      if (off[0] < -1.25) off[0] =  1.25;
 
-    // Draw each fish
-    for(let r=0; r<all_fish.length; r++){
-      const rec = all_fish[r];
-      const vbuf = rec[0];
-      const ibuf = rec[1];
-      const eyebuf = rec[2];
-      let   color  = rec[3];
-      const offset = rec[4];    // Float32Array (mutated below)
-      const scale  = rec[5];
-      const dir    = rec[6];
-
-      // Movement (from the spec): drift right, wiggle y, flip at right border
-      offset[0] += 0.01;
-      offset[1] += 0.1*Math.random();
-      offset[1] -= 0.1*Math.random();
-      if(offset[0] >= 1.0) {
-        // when hitting right edge, switch direction sign effect
-        rec[6] = -1; // keep record too, although matrix handles flip already
+      // color pulse for small fish
+      if (i !== 0) {
+        const a = 0.35 + 0.35*(0.5+0.5*Math.sin(1.8*t + phase));
+        color = new Float32Array([color[0], color[1], color[2], a]);
+        r[3] = color;
       }
-      offset[0] *= dir;
 
-      // Color: little fish pulse blue-ish; the big one (index 0) keeps red
-      if(r !== 0){
-        const a = 0.6 + 0.4 * Math.sin(t * 2.0); // 0.2..1.0 approx
-        color = new Float32Array([
-          0.3 + 0.2*Math.sin(t + 0.0),
-          0.6 + 0.2*Math.sin(t + 2.0),
-          0.9 + 0.1*Math.sin(t + 4.0),
-          a
-        ]);
-      }else{
-        color = new Float32Array([1,0,0,0.7]);
-      }
-      rec[3] = color;
-
-      // Rotation (random small angle each frame, as spec says)
-      const theta = (Math.random()*10.0) * Math.PI/180.0;
+      // --- transform: T * R * (FlipX*Scale) ---
+      const theta = 0.08 * Math.sin(3.0*t + phase); // gentle rotation
       const c = Math.cos(theta), s = Math.sin(theta);
+      const sx = scale * dir; // flip on X when dir = -1
+      const sy = scale;
 
-      // Transform matrix (column-major): direction * scale on diagonal,
-      // rotation in xy, translation via last column.
-      const sx = dir*scale*c,  syx =  s;
-      const sxy = -s,          sy = dir*scale*c;
-
-      const transform = new Float32Array([
-        sx,    sxy,   0, 0,
-        syx,   sy,    0, 0,
-        0,     0,   dir*scale*1.0, 0,
-        offset[0], offset[1], offset[2], 1
+      const M = new Float32Array([
+        sx * c,  -sy * s, 0, 0,
+        sx * s,   sy * c, 0, 0,
+        0,        0,      1, 0,
+        off[0],   off[1], 0, 1
       ]);
 
-      // Set uniforms
-      gl.uniformMatrix4fv(u_transform, false, transform);
+      gl.uniformMatrix4fv(u_transform, false, M);
       gl.uniform4fv(u_color, color);
 
-      // Bind + draw triangles
-      bindFishBuffers(vbuf, ibuf);
-      drawFishTriangles();
+      bindTri(vbuf, ibuf);
+      gl.drawElements(gl.TRIANGLES, 15, gl.UNSIGNED_BYTE, 0);
 
-      // Eye (POINTS) with dynamic size ~ scale
-      drawFishEye(eyebuf, scale*20.0, [0,0,0,0.5]);
+      drawEye(eyebuf, scale*20.0, [0,0,0,0.55]);
     }
 
-    hud.textContent = `fish: ${all_fish.length}`;
+    hud.textContent = `fish: ${fish.length}`;
     requestAnimationFrame(animate);
   }
   requestAnimationFrame(animate);
