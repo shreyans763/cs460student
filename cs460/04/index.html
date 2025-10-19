@@ -13,8 +13,10 @@
     header{position:fixed;inset:0 0 auto 0;text-align:center;padding:10px 8px;
       background:linear-gradient(#0009,#0000);backdrop-filter:blur(2px)}
     #hud{position:fixed;left:10px;bottom:10px;background:#0008;padding:6px 9px;border-radius:8px}
+    #help{position:fixed;right:10px;bottom:10px;background:#0008;padding:6px 9px;border-radius:8px;max-width:48ch}
     canvas{display:block;width:100%;height:100%}
     small{opacity:.85}
+    kbd{background:#fff2;color:#fff;padding:1px 5px;border-radius:4px}
   </style>
 </head>
 <body>
@@ -24,9 +26,15 @@
   </header>
   <canvas id="gl"></canvas>
   <div id="hud">loading…</div>
+  <div id="help">
+    <div><b>Controls (red fish):</b></div>
+    <div><kbd>←</kbd>/<kbd>→</kbd> direction &nbsp; <kbd>↑</kbd>/<kbd>↓</kbd> front/back (scale)</div>
+    <div><kbd>Space</kbd> pause &nbsp; <kbd>+</kbd>/<kbd>-</kbd> add/remove fish</div>
+    <div><kbd>R</kbd> reset red fish &nbsp; <kbd>H</kbd> toggle this help</div>
+  </div>
 
   <script>
-  // ---------- WebGL setup ----------
+  // ---------- WebGL ----------
   const canvas = document.getElementById('gl');
   const gl = canvas.getContext('webgl', {alpha:true, antialias:true});
   if(!gl) { alert('WebGL not supported'); }
@@ -74,7 +82,7 @@
   const u_transform = gl.getUniformLocation(prog, 'u_transform');
   const u_pointsize = gl.getUniformLocation(prog, 'u_pointsize');
 
-  // ---------- Geometry (7 verts, 5 triangles) ----------
+  // ---------- Geometry ----------
   const FISH_VERTS = new Float32Array([
      0.5,  0.0, 0.0,   // 0 nose
      0.2,  0.25,0.0,   // 1 upper body
@@ -84,9 +92,7 @@
     -0.2, -0.15,0.0,   // 5 lower tail base
      0.2, -0.25,0.0    // 6 lower body
   ]);
-  const FISH_INDEX = new Uint8Array([
-    0,1,6,  1,2,6,  2,5,6,  2,3,5,  3,4,5
-  ]);
+  const FISH_INDEX = new Uint8Array([ 0,1,6,  1,2,6,  2,5,6,  2,3,5,  3,4,5 ]);
   const EYE_POS = new Float32Array([0.2, 0.2, 0.0]);
 
   function makeFish(color=[1,0,0,0.7], offset=[0,0,0], scale=1, dir=1){
@@ -105,22 +111,39 @@
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
-    // phase & speed for smooth wiggle
     const phase = Math.random()*Math.PI*2;
-    const speed = 0.25 + Math.random()*0.35; // units/sec
+    const speed = 0.30 + Math.random()*0.30;    // units/sec
     return [vbuf, ibuf, eyebuf, new Float32Array(color), new Float32Array(offset), scale, dir, phase, speed];
   }
 
   // ---------- Scene ----------
   const fish = [];
-  // big red (flipped)
-  fish.push(makeFish([1,0,0,0.7], [0,0,0], 1.0, -1));
-  // 100+ small random fish
+  fish.push(makeFish([1,0,0,0.7], [0,0,0], 1.0, -1)); // big red flipped
   for(let i=0;i<120;i++){
     const c = [0.35+0.2*Math.random(), 0.6+0.25*Math.random(), 0.85+0.15*Math.random(), 0.35+0.55*Math.random()];
     const o = [ (Math.random()*2-1)*1.1, (Math.random()*2-1)*0.8, 0 ];
     const s = 0.15 + Math.random()*0.30;
     fish.push(makeFish(c, o, s, 1));
+  }
+
+  function addRandomFish(n=10){
+    for(let i=0;i<n && fish.length<320;i++){
+      const c = [0.35+0.2*Math.random(), 0.6+0.25*Math.random(), 0.85+0.15*Math.random(), 0.35+0.55*Math.random()];
+      const o = [ (Math.random()*2-1)*1.1, (Math.random()*2-1)*0.8, 0 ];
+      const s = 0.15 + Math.random()*0.30;
+      fish.push(makeFish(c, o, s, Math.random()<0.5?1:-1));
+    }
+  }
+  function removeFish(n=10){
+    fish.splice(Math.max(1, fish.length-n), n); // keep the red fish at index 0
+  }
+  function resetRed(){
+    const r = fish[0];
+    r[4][0] = 0; r[4][1] = 0;  // offset
+    r[5] = 1.0;                // scale
+    r[6] = -1;                 // direction
+    r[7] = 0;                  // phase
+    r[8] = 0.35;               // speed
   }
 
   function bindTri(vbuf, ibuf){
@@ -129,7 +152,6 @@
     gl.enableVertexAttribArray(a_position);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf);
   }
-
   function drawEye(eyebuf, size, col=[0,0,0,0.55]){
     gl.uniform4fv(u_color, new Float32Array(col));
     gl.uniform1f(u_pointsize, size);
@@ -139,16 +161,32 @@
     gl.drawArrays(gl.POINTS, 0, 1);
   }
 
-  // ---------- Render loop (with fixed movement) ----------
+  // ---------- Render loop ----------
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.disable(gl.DEPTH_TEST);
 
-  const hud = document.getElementById('hud');
+  const hud  = document.getElementById('hud');
+  const help = document.getElementById('help');
+
+  const state = { paused:false, showHelp:true };
   let last = performance.now();
 
+  addEventListener('keydown', (e) => {
+    const r = fish[0];
+    if (e.key === ' ') { state.paused = !state.paused; return; }
+    if (e.key === 'ArrowLeft')  { r[6] = -1; return; }      // face left
+    if (e.key === 'ArrowRight') { r[6] =  1; return; }      // face right
+    if (e.key === 'ArrowUp')    { r[5] = Math.min(2.5, r[5]*1.06); return; }   // closer (front)
+    if (e.key === 'ArrowDown')  { r[5] = Math.max(0.35, r[5]*0.94); return; }  // farther (back)
+    if (e.key === '+' || e.key === '=') { addRandomFish(10); return; }
+    if (e.key === '-' || e.key === '_') { removeFish(10); return; }
+    if (e.key === 'r' || e.key === 'R') { resetRed(); return; }
+    if (e.key === 'h' || e.key === 'H') { state.showHelp = !state.showHelp; help.style.display = state.showHelp?'':'none'; }
+  });
+
   function animate(now = performance.now()){
-    const dt = Math.min(0.05, (now - last)/1000); // clamp for stability
+    const dt = state.paused ? 0 : Math.min(0.05, (now - last)/1000);
     last = now;
     const t = now * 0.001;
 
@@ -165,31 +203,43 @@
       const phase = r[7];
       const spd   = r[8];
 
-      // --- movement (FIXED) ---
-      off[0] += (spd * dt) * dir;                          // move with direction
-      off[1] += 0.25 * Math.sin(2.0*t + phase) * dt;       // smooth wiggle
-      // wrap around horizontally
+      // movement
+      off[0] += (spd * dt) * dir;
+      off[1] += 0.25 * Math.sin(2.0*t + phase) * dt;
+
+      // wrap both axes so nobody disappears forever
       if (off[0] >  1.25) off[0] = -1.25;
       if (off[0] < -1.25) off[0] =  1.25;
+      if (off[1] >  1.00) off[1] = -1.00;
+      if (off[1] < -1.00) off[1] =  1.00;
 
-      // color pulse for small fish
+      // alpha pulse for small fish
       if (i !== 0) {
         const a = 0.35 + 0.35*(0.5+0.5*Math.sin(1.8*t + phase));
         color = new Float32Array([color[0], color[1], color[2], a]);
         r[3] = color;
       }
 
-      // --- transform: T * R * (FlipX*Scale) ---
-      const theta = 0.08 * Math.sin(3.0*t + phase); // gentle rotation
+      // correct column-major matrix:  T * R * (FlipX*Scale)
+      const theta = 0.08 * Math.sin(3.0*t + phase);
       const c = Math.cos(theta), s = Math.sin(theta);
-      const sx = scale * dir; // flip on X when dir = -1
+      const sx = scale * dir;   // flip on X when dir = -1
       const sy = scale;
 
+      // a b 0 0
+      // c d 0 0
+      // 0 0 1 0
+      // tx ty 0 1  (column-major)
+      const a11 = sx * c;
+      const a21 = sx * s;
+      const a12 = -sy * s;
+      const a22 =  sy * c;
+
       const M = new Float32Array([
-        sx * c,  -sy * s, 0, 0,
-        sx * s,   sy * c, 0, 0,
-        0,        0,      1, 0,
-        off[0],   off[1], 0, 1
+        a11, a21, 0, 0,
+        a12, a22, 0, 0,
+        0,   0,   1, 0,
+        off[0], off[1], 0, 1
       ]);
 
       gl.uniformMatrix4fv(u_transform, false, M);
@@ -197,11 +247,10 @@
 
       bindTri(vbuf, ibuf);
       gl.drawElements(gl.TRIANGLES, 15, gl.UNSIGNED_BYTE, 0);
-
       drawEye(eyebuf, scale*20.0, [0,0,0,0.55]);
     }
 
-    hud.textContent = `fish: ${fish.length}`;
+    hud.textContent = \`fish: \${fish.length}  \${state.paused ? '(paused)' : ''}\`;
     requestAnimationFrame(animate);
   }
   requestAnimationFrame(animate);
