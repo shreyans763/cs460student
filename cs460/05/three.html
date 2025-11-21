@@ -2,143 +2,113 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CS460 A5 — Three.js Viewer</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root { --bg:#1c2340; --panel:#111628; --text:#d9def7; --muted:#9aa4c8; }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;}
-    #hud{position:fixed;left:8px;top:8px;opacity:.8}
-    #bar{
-      position:fixed;left:8px;bottom:8px;right:8px;
-      background:rgba(0,0,0,.2);backdrop-filter:saturate(120%) blur(6px);
-      border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px; display:flex; gap:8px; align-items:center;
-    }
-    select,button{
-      background:var(--panel); color:var(--text); border:1px solid rgba(255,255,255,.12);
-      border-radius:8px; padding:6px 10px; outline:none;
-    }
-    button{cursor:pointer}
-    canvas{display:block}
+    html, body { margin: 0; height: 100%; background:#1b2141; color:#cbd5e1; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    #ui { position: fixed; left: 12px; bottom: 12px; display:flex; gap:8px; align-items:center; background:#0f172a88; padding:10px 12px; border-radius:12px; backdrop-filter: blur(6px); }
+    select, button { background:#0f172a; color:#cbd5e1; border:1px solid #29314f; border-radius:10px; padding:6px 10px; }
+    #hint { position: fixed; top:8px; left:8px; opacity:.85 }
+    canvas { display:block; }
   </style>
 </head>
 <body>
-  <div id="hud">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
-  <div id="bar">
+  <div id="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
+  <div id="ui">
     <span>Model:</span>
-    <select id="modelSel">
-      <option value="./Shoe.glb">Shoe.glb (Blender)</option>
-      <option value="./poly.glb">poly.glb (PolyCam)</option>
+    <select id="modelSel" aria-label="Choose model">
+      <option value="Shoe.glb">Shoe.glb (Blender)</option>
+      <option value="poly.glb">poly.glb (PolyCam)</option>
     </select>
     <button id="resetBtn">Reset View</button>
   </div>
 
   <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.164.0/build/three.module.js';
-    import { OrbitControls } from 'https://unpkg.com/three@0.164.0/examples/jsm/controls/OrbitControls.js';
-    import { GLTFLoader } from 'https://unpkg.com/three@0.164.0/examples/jsm/loaders/GLTFLoader.js';
+    import * as THREE from 'https://unpkg.com/three@0.160.1/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
+    import { GLTFLoader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
 
     // renderer
-    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
 
     // scene + camera
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x20264a);
-    const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.01, 2000);
-    camera.position.set(0.6, 0.35, 1.2);
+    scene.background = new THREE.Color(0x1b2141);
+
+    const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 100);
+    camera.position.set(0.8, 0.5, 1.4);
+
+    // lights
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x334466, 0.6);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.1);
+    dir.position.set(2, 3, 2);
+    scene.add(dir);
 
     // controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // lights
-    scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-    const dir1 = new THREE.DirectionalLight(0xffffff, 0.9);
-    dir1.position.set(1, 1, 1);
-    scene.add(dir1);
-    const dir2 = new THREE.DirectionalLight(0xffffff, 0.6);
-    dir2.position.set(-1, 0.5, -1);
-    scene.add(dir2);
-
-    // loader
+    // loader + current model
     const loader = new GLTFLoader();
-
-    // current model root
     let current = null;
 
-    function disposeObject3D(obj) {
-      obj.traverse(n=>{
-        if (n.isMesh) {
-          n.geometry?.dispose?.();
-          if (Array.isArray(n.material)) n.material.forEach(m => (m.map?.dispose?.(), m.dispose?.()));
-          else { n.material?.map?.dispose?.(); n.material?.dispose?.(); }
-        }
-      });
-    }
-
-    function fitCameraToObject(obj) {
+    function fitToObject(obj) {
       const box = new THREE.Box3().setFromObject(obj);
-      const size = box.getSize(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3()).length();
       const center = box.getCenter(new THREE.Vector3());
 
       // frame the object
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const fitHeightDistance = maxDim / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)));
-      const fitWidthDistance  = fitHeightDistance / camera.aspect;
-      const distance = 1.2 * Math.max(fitHeightDistance, fitWidthDistance);
-
-      camera.near = distance / 100;
-      camera.far  = distance * 100;
-      camera.updateProjectionMatrix();
-
-      camera.position.copy(center).add(new THREE.Vector3(distance, distance*0.6, distance));
       controls.target.copy(center);
+      const dist = size * 0.9;
+      camera.position.copy(center).add(new THREE.Vector3(dist, dist * 0.6, dist));
+      camera.near = size / 100;
+      camera.far = size * 100;
+      camera.updateProjectionMatrix();
       controls.update();
     }
 
     function loadModel(url) {
-      // remove old
-      if (current) { scene.remove(current); disposeObject3D(current); current = null; }
-
-      // show a tiny placeholder while loading (optional)
-      const placeholder = new THREE.AxesHelper(0.25);
-      scene.add(placeholder);
-
-      loader.load(url, (gltf)=>{
-        scene.remove(placeholder);
+      if (current) { scene.remove(current); current.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material?.dispose) o.material.dispose(); }); current = null; }
+      loader.load(url, (gltf) => {
         current = gltf.scene;
+        current.traverse((o) => {
+          if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+        });
         scene.add(current);
-        fitCameraToObject(current);
-      }, undefined, (err)=>{
-        scene.remove(placeholder);
-        console.error('GLTF load error:', err);
-        alert('Could not load '+url+' — check the file name/case and path.');
+        fitToObject(current);
+      }, undefined, (err) => {
+        console.error('Failed to load', url, err);
       });
     }
 
-    // UI events
+    // UI hooks
     const sel = document.getElementById('modelSel');
-    document.getElementById('resetBtn').addEventListener('click', ()=> current && fitCameraToObject(current));
-    sel.addEventListener('change', ()=> loadModel(sel.value));
+    const resetBtn = document.getElementById('resetBtn');
+    sel.addEventListener('change', () => loadModel(sel.value));
+    resetBtn.addEventListener('click', () => { if (current) fitToObject(current); });
 
-    // initial load (default to Shoe.glb)
-    loadModel(sel.value);
+    // default model
+    loadModel('Shoe.glb');
+
+    // loop
+    function tick() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(tick);
+    }
+    tick();
 
     // resize
-    addEventListener('resize', ()=>{
-      camera.aspect = innerWidth/innerHeight;
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
     });
-
-    // animate
-    (function animate(){
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    })();
   </script>
 </body>
 </html>
