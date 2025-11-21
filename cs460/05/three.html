@@ -1,0 +1,81 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CS460 A5 — Three.js Viewer</title>
+<style>
+  html,body{height:100%;margin:0;background:#232949;color:#cdd6f4;font:14px/1.4 system-ui;}
+  #hint{position:fixed;left:8px;top:8px;opacity:.85}
+  #ui{position:fixed;left:8px;bottom:8px;display:flex;gap:8px;align-items:center;background:#10131f88;border:1px solid #1e2437;border-radius:8px;padding:8px}
+  select,button{background:#1b2033;color:#eaeefc;border:1px solid #2a355a;border-radius:6px;padding:6px 10px}
+</style>
+</head><body>
+<div id="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
+<div id="ui">
+  <span>Model:</span>
+  <select id="model">
+    <option value="Shoe.glb" selected>Shoe.glb (Blender)</option>
+    <option value="poly.glb">poly.glb (PolyCam)</option>
+  </select>
+  <button id="reset">Reset View</button>
+</div>
+<script type="module">
+import * as THREE from "https://unpkg.com/three@0.165.0/build/three.module.js";
+import {OrbitControls} from "https://unpkg.com/three@0.165.0/examples/jsm/controls/OrbitControls.js";
+import {GLTFLoader} from "https://unpkg.com/three@0.165.0/examples/jsm/loaders/GLTFLoader.js";
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.01, 1000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setClearColor(0x232949, 1);
+document.body.appendChild(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x2a2a44, 1.0); scene.add(hemi);
+const dir  = new THREE.DirectionalLight(0xffffff, 2.0); dir.position.set(3,10,10); scene.add(dir);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+let current;
+async function loadModel(url){
+  if(current){ scene.remove(current); current.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ if(Array.isArray(o.material)) o.material.forEach(m=>m.dispose()); else o.material.dispose(); } }); current = null; }
+  const loader = new GLTFLoader();
+  const gltf = await loader.loadAsync(url);
+  current = gltf.scene;
+  scene.add(current);
+
+  // center + put on ground + frame
+  const box = new THREE.Box3().setFromObject(current);
+  const size = new THREE.Vector3(); box.getSize(size);
+  const center = new THREE.Vector3(); box.getCenter(center);
+  current.position.sub(center);                      // center to origin
+  current.position.y -= box.min.y;                   // sit on ground
+
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * Math.PI/180;
+  const dist = (maxDim*1.2) / (2*Math.tan(fov/2));
+  camera.position.set(dist, dist*0.5, dist*1.2);
+  controls.target.set(0, size.y*0.5, 0);
+  controls.update();
+}
+
+function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
+animate();
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// UI
+const sel = document.getElementById('model');
+const btn = document.getElementById('reset');
+const params = new URLSearchParams(location.search);
+sel.value = params.get('model') || 'Shoe.glb';
+loadModel(sel.value).catch(e=>console.error(e));
+sel.onchange = ()=>{ history.replaceState({},'',`?model=${encodeURIComponent(sel.value)}`); loadModel(sel.value); };
+btn.onclick = ()=>{ loadModel(sel.value); };
+</script>
+</body></html>

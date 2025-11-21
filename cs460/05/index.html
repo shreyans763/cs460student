@@ -1,160 +1,29 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>CS460 A5 — Three.js Viewer (PolyCam + Blender)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    html,body{height:100%;margin:0;background:#171c33;overflow:hidden}
-    .hint{position:fixed;left:10px;top:10px;color:#cfd7ff;font:14px/1.3 system-ui,sans-serif}
-  </style>
-  <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
-</head>
-<body>
-  <div class="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
-
-  <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-    import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
-    import { AnaglyphEffect } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/effects/AnaglyphEffect.js';
-    import { VertexNormalsHelper } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/helpers/VertexNormalsHelper.js';
-    import { Pane } from 'https://cdn.jsdelivr.net/npm/tweakpane@4.0.5/dist/tweakpane.min.js';
-
-    const renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-    renderer.setSize(innerWidth,innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,10000);
-    camera.position.set(0,8,14);
-
-    const controls = new OrbitControls(camera,renderer.domElement);
-    controls.enableDamping = true;
-
-    const effect = new AnaglyphEffect(renderer);
-    effect.setSize(innerWidth,innerHeight);
-
-    const dir = new THREE.DirectionalLight(0xffffff,2.2);
-    dir.position.set(10,15,10);
-    scene.add(dir);
-
-    const amb = new THREE.AmbientLight(0x223355,0.8);
-    scene.add(amb);
-
-    const makeShadow = () => {
-      const g = new THREE.CircleGeometry(1.6,64);
-      const m = new THREE.MeshBasicMaterial({color:0x000,transparent:true,opacity:0.25});
-      const mesh = new THREE.Mesh(g,m);
-      mesh.rotation.x = -Math.PI/2;
-      mesh.position.y = 0.05;
-      return mesh;
-    };
-
-    window.SCENE = {
-      anaglyph:false,
-      poly:null, blender:null,
-      rotate_poly:false, rotate_blender:false,
-      blender_helper:null, blender_old_material:null,
-      do_rotate_poly(){ this.rotate_poly=!this.rotate_poly; },
-      do_rotate_blender(){ this.rotate_blender=!this.rotate_blender; },
-      change_material(){
-        if(!this.blender) return;
-        if(!this.blender_old_material){
-          this.blender_old_material = this.blender.material.clone();
-          this.blender.material = new THREE.MeshNormalMaterial();
-        }else{
-          this.blender.material = this.blender_old_material.clone();
-          this.blender_old_material = null;
-        }
-      }
-    };
-
-    const loader = new GLTFLoader();
-    const Q_ID = new THREE.Quaternion(0,0,0,1);
-    const Q_180Y = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI);
-
-    // PolyCam (left)
-    loader.load('poly.glb', (gltf)=>{
-      const root = gltf.scenes[0];
-      const mesh = root.children[0] || root;
-      mesh.scale.setScalar(10);
-      mesh.quaternion.copy(Q_ID);
-      mesh.position.set(-3.5,0,0);
-      mesh.add(makeShadow());
-      window.SCENE.poly = mesh;
-      scene.add(mesh);
-      polyUI.addBinding(mesh.material,'wireframe',{label:'wireframe'});
-      polyUI.addButton({title:'rotate!'}).on('click',()=>window.SCENE.do_rotate_poly());
-    });
-
-    // Blender (right)
-    loader.load('Shoe.glb', (gltf)=>{
-      const root = gltf.scenes[0];
-      const mesh = root.children[0] || root;
-      mesh.scale.setScalar(10);
-      mesh.quaternion.copy(Q_ID);
-      mesh.position.set(+3.5,0,0);
-      mesh.add(makeShadow());
-      window.SCENE.blender = mesh;
-      scene.add(mesh);
-
-      const helper = new VertexNormalsHelper(mesh,0.15,'deepskyblue');
-      helper.visible = false;
-      window.SCENE.blender_helper = helper;
-      scene.add(helper);
-
-      blenderUI.addBinding(helper,'visible',{label:'Show normals!'});
-      blenderUI.addButton({title:'Change Material!'}).on('click',()=>window.SCENE.change_material());
-      blenderUI.addButton({title:'rotate!'}).on('click',()=>window.SCENE.do_rotate_blender());
-    });
-
-    const pane = new Pane();
-    const sceneUI = pane.addFolder({title:'Scene'});
-    sceneUI.addBinding(window.SCENE,'anaglyph',{label:'Anaglyph'});
-    sceneUI.addBinding(dir.position,'x',{min:-100,max:100,label:'Light X'});
-    sceneUI.addBinding(dir.position,'y',{min:-100,max:100,label:'Light Y'});
-    sceneUI.addBinding(dir.position,'z',{min:-100,max:100,label:'Light Z'});
-    sceneUI.addBinding(dir,'intensity',{min:0,max:5,label:'Dir Intensity'});
-    sceneUI.addBinding(amb,'intensity',{min:0,max:3,label:'Amb Intensity'});
-    sceneUI.addBinding(amb,'color',{view:'color',label:'Ambient Color'});
-    const polyUI = pane.addFolder({title:'PolyCam Mesh'});
-    const blenderUI = pane.addFolder({title:'Blender Mesh'});
-
-    const stats = new Stats();
-    document.body.appendChild(stats.dom);
-
-    addEventListener('resize', ()=>{
-      camera.aspect = innerWidth/innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(innerWidth,innerHeight);
-      effect.setSize(innerWidth,innerHeight);
-    });
-
-    const slerpStep = 0.02;
-    const tmpQ = new THREE.Quaternion();
-    function animate(){
-      requestAnimationFrame(animate);
-      controls.update();
-
-      if(window.SCENE.poly){
-        tmpQ.copy(window.SCENE.rotate_poly ? Q_180Y : Q_ID);
-        window.SCENE.poly.quaternion.slerp(tmpQ,slerpStep);
-      }
-      if(window.SCENE.blender){
-        tmpQ.copy(window.SCENE.rotate_blender ? Q_180Y : Q_ID);
-        window.SCENE.blender.quaternion.slerp(tmpQ,slerpStep);
-        if(window.SCENE.blender_helper && window.SCENE.blender_helper.visible){
-          window.SCENE.blender_helper.update();
-        }
-      }
-
-      stats.update();
-      if(window.SCENE.anaglyph){ effect.render(scene,camera); }
-      else{ renderer.render(scene,camera); }
-    }
-    animate();
-  </script>
-</body>
-</html>
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Assignment 5 — PolyCam (left) + Blender (right)</title>
+<style>
+  :root{--bg:#0f1424;--card:#151b2c;--ink:#dbe6ff;--sub:#98a2c7;--stroke:#232b45;--accent:#8fb3ff}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui}
+  .wrap{max-width:1100px;margin:60px auto;padding:0 20px}
+  h1{font-weight:740;letter-spacing:.2px;margin:0 0 16px}
+  p{color:var(--sub);margin:0 0 28px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .card{background:var(--card);border:1px solid var(--stroke);border-radius:14px;padding:18px;text-decoration:none;color:inherit;display:block}
+  .card:hover{border-color:var(--accent)}
+  .title{font-weight:650;margin-bottom:6px}
+  .sub{color:var(--sub);font-size:14px}
+</style></head><body>
+<div class="wrap">
+  <h1>Assignment 5 — PolyCam (left) + Blender (right)</h1>
+  <p>Viewer pages and assets for grading. Use the links below.</p>
+  <div class="grid">
+    <a class="card" href="./webgpu.html"><div class="title">WebGPU 3D Viewer (Babylon.js)</div><div class="sub">Loads <code>Shoe.glb</code> or <code>poly.glb</code>, orbit + UI</div></a>
+    <a class="card" href="./three.html"><div class="title">Three.js Viewer (WebGL)</div><div class="sub">Simple viewer with orbit + auto-framing</div></a>
+    <a class="card" href="./ar.html"><div class="title">AR (marker-based)</div><div class="sub">Uses your webcam/phone camera (A-Frame + AR.js)</div></a>
+    <a class="card" href="./Shoe.glb"><div class="title">Shoe.glb</div><div class="sub">Cleaned Blender export</div></a>
+    <a class="card" href="./poly.glb"><div class="title">poly.glb</div><div class="sub">Raw Polycam scan</div></a>
+    <a class="card" href="./Shoe.stl"><div class="title">Shoe.stl</div><div class="sub">STL export (mesh only)</div></a>
+    <a class="card" href="./Shoe.blend"><div class="title">Shoe.blend</div><div class="sub">Blender working file</div></a>
+  </div>
+</div>
+</body></html>
