@@ -29,29 +29,31 @@
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
     import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
     import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/DRACOLoader.js';
+    import { KTX2Loader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/KTX2Loader.js';
+    import MeshoptDecoder from 'https://cdn.jsdelivr.net/npm/meshoptimizer@0.20.0/meshopt_decoder.module.js';
 
     let scene, camera, renderer, controls, current;
-    const bg = 0x202544;
 
     init();
     loadModel(document.getElementById('model').value);
 
     function init() {
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(bg);
+      scene.background = new THREE.Color(0x202544);
 
       camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
       camera.position.set(0.8, 0.5, 1.4);
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.outputColorSpace = THREE.SRGBColorSpace;   // correct color
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.0;
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
-      const hemi = new THREE.HemisphereLight(0xffffff, 0x444466, 1.0);
-      scene.add(hemi);
+      // Simple lights
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x444466, 1.0));
       const dir = new THREE.DirectionalLight(0xffffff, 2.0);
       dir.position.set(2, 4, 2);
       scene.add(dir);
@@ -60,36 +62,67 @@
       controls.enableDamping = true;
       controls.target.set(0, 0.25, 0);
 
+      // UI
       window.addEventListener('resize', onResize);
-      document.getElementById('model').addEventListener('change', (e)=> loadModel(e.target.value));
-      document.getElementById('reset').addEventListener('click', ()=> loadModel(document.getElementById('model').value));
+      document.getElementById('model').addEventListener('change', e => loadModel(e.target.value));
+      document.getElementById('reset').addEventListener('click', () => loadModel(document.getElementById('model').value));
 
       animate();
     }
 
+    function makeLoader() {
+      const loader = new GLTFLoader().setPath('./');
+
+      // DRACO for compressed geometry
+      const draco = new DRACOLoader();
+      draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
+      loader.setDRACOLoader(draco);
+
+      // KTX2 (if textures are in .ktx2); harmless otherwise
+      const ktx2 = new KTX2Loader().setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/');
+      ktx2.detectSupport(renderer);
+      loader.setKTX2Loader(ktx2);
+
+      // Meshopt (if used)
+      loader.setMeshoptDecoder(MeshoptDecoder);
+
+      return loader;
+    }
+
     function loadModel(filename) {
-      // dispose previous model
+      // dispose previous scene object
       if (current) {
         scene.remove(current);
-        current.traverse((o)=>{
+        current.traverse(o => {
           if (o.geometry) o.geometry.dispose();
           if (o.material) {
             const mats = Array.isArray(o.material) ? o.material : [o.material];
             for (const m of mats) {
-              Object.values(m).forEach(v => v && v.isTexture && v.dispose && v.dispose());
-              m.dispose && m.dispose();
+              for (const k in m) {
+                const v = m[k];
+                if (v && v.isTexture && v.dispose) v.dispose();
+              }
+              if (m.dispose) m.dispose();
             }
           }
         });
         current = null;
       }
 
-      const loader = new GLTFLoader().setPath('./');
-      loader.load(filename, (gltf)=>{
-        current = gltf.scene;
-        scene.add(current);
-        fitCameraToObject(current);
-      });
+      const loader = makeLoader();
+      loader.load(
+        filename,
+        (gltf) => {
+          current = gltf.scene;
+          scene.add(current);
+          fitCameraToObject(current);
+        },
+        undefined,
+        (err) => {
+          console.error('GLB load error:', err);
+          document.getElementById('hint').textContent = 'Failed to load model (see console).';
+        }
+      );
     }
 
     function fitCameraToObject(obj) {
@@ -100,6 +133,7 @@
       controls.reset();
       controls.target.copy(center);
 
+      // Keep a comfortable distance from the model
       const dist = Math.max(size, 0.5);
       camera.near = dist / 100;
       camera.far = dist * 100;
