@@ -1,27 +1,40 @@
 <!doctype html>
-<meta charset="utf-8" />
-<title>CS460 — Assignment 5 (Shreyans)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-  :root{color-scheme:dark}
-  body{margin:24px;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:#0b0f1a;color:#e6e6e6}
-  h1{font-size:22px;margin:0 0 10px}
-  p{margin:0 0 14px}
-  a{color:#7dc0ff;text-decoration:none}
-  a:hover{text-decoration:underline}
-  code{background:rgba(255,255,255,.06);padding:.08em .35em;border-radius:6px}
-  ul{margin:8px 0 0 18px}
-  .box{border:1px solid #25304a;border-radius:12px;padding:14px 16px;background:#0e1422;max-width:780px}
-</style>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CS460 A5 — PolyCam & Blender (Shreyans)</title>
+  <style>
+    :root{--bg:#0f172a;--ink:#e2e8f0;--mut:#94a3b8;--card:#111827;}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:900px;margin:40px auto;padding:24px}
+    h1{margin:0 0 10px;font-weight:700}
+    .mut{color:var(--mut);margin:0 0 24px}
+    ul{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+    a.card{display:block;padding:16px;border-radius:14px;background:var(--card);text-decoration:none;color:var(--ink);border:1px solid #1f2937}
+    a.card span{display:block;font-size:13px;color:var(--mut);margin-top:6px}
+    code{background:#0b1220;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Assignment 5 — PolyCam (left) + Blender (right)</h1>
+    <p class="mut">Viewer pages and assets for grading. Use the links below.</p>
 
-<h1>Assignment 5 — PolyCam (raw) + Blender (cleaned)</h1>
-<div class="box">
-  <p>Artifacts for grading:</p>
-  <ul>
-    <li><a href="./webgpu.html" target="_blank">WebGPU/WebGL viewer</a> — loads <code>Shoe.glb</code> (cleaned)</li>
-    <li><a href="./ar.html" target="_blank">AR viewer (AR.js)</a> — allow camera; point at a <em>Hiro</em> marker</li>
-    <li>Raw scan: <a href="./poly.glb" target="_blank">poly.glb</a></li>
-    <li>Cleaned exports: <a href="./Shoe.glb" target="_blank">Shoe.glb</a>, <a href="./Shoe.stl" target="_blank">Shoe.stl</a></li>
-    <li>Blender source: <a href="./Shoe.blend" target="_blank">Shoe.blend</a></li>
-  </ul>
-</div>
+    <ul>
+      <li><a class="card" href="./webgpu.html">WebGPU 3D Viewer (Babylon.js)
+        <span>Loads <code>Shoe.glb</code> or <code>poly.glb</code>, orbit + UI</span></a></li>
+      <li><a class="card" href="./ar.html">AR (marker-based)
+        <span>Uses your webcam/phone camera (A-Frame + AR.js)</span></a></li>
+      <li><a class="card" href="./Shoe.glb">Shoe.glb
+        <span>Cleaned Blender export</span></a></li>
+      <li><a class="card" href="./poly.glb">poly.glb
+        <span>Raw Polycam scan</span></a></li>
+      <li><a class="card" href="./Shoe.stl">Shoe.stl
+        <span>STL export (mesh only)</span></a></li>
+      <li><a class="card" href="./Shoe.blend">Shoe.blend
+        <span>Blender working file</span></a></li>
+    </ul>
+  </div>
+</body>
+</html>
