@@ -1,110 +1,119 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>A5 – WebGPU/Babylon viewer</title>
+<link rel="icon" href="data:;base64,=">
 <style>
-  :root{--bg:#1e2240;--ui:#0b0f2b;--ink:#e8ecff;--mut:#aab0d9}
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hidden;font:15px system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  #ui{position:fixed;inset:auto 12px 12px 12px;display:flex;gap:8px;align-items:center;
-      background:rgba(11,15,43,.75);backdrop-filter:blur(6px);border:1px solid #22284d;
-      padding:10px 12px;border-radius:12px}
-  select,button{background:#0e1440;color:var(--ink);border:1px solid #2a3270;border-radius:10px;padding:8px 10px}
-  button{cursor:pointer}
-  #hint{color:var(--mut)}
-  canvas{display:block;width:100vw;height:100vh;outline:none}
+  html,body{height:100%;margin:0;background:#1c2344;color:#e5e9ff;font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  #ui{position:fixed;left:12px;right:12px;bottom:12px;display:flex;gap:8px;align-items:center;
+      background:#0b1028aa;border-radius:10px;padding:10px 12px;backdrop-filter:blur(6px)}
+  select,button{background:#121838;border:1px solid #2c355f;color:#e5e9ff;border-radius:8px;padding:8px 10px}
+  #loading{position:fixed;inset:0;display:none;place-items:center;background:#0b102888;color:#fff;font-weight:600}
+  #loading.show{display:grid}
+  #msg{position:fixed;top:10px;left:10px;font-weight:600;opacity:.7}
+  canvas{display:block;width:100%;height:100%}
 </style>
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
 <body>
+<div id="msg">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
 <canvas id="c"></canvas>
+<div id="loading">Loading model…</div>
 <div id="ui">
   <label>Model:&nbsp;
     <select id="model">
-      <option value="Shoe.glb">Shoe.glb (Blender)</option>
       <option value="poly.glb">poly.glb (PolyCam)</option>
+      <option value="Shoe.glb">Shoe.glb (Blender)</option>
     </select>
   </label>
   <button id="reset">Reset View</button>
-  <span id="hint">🖱️ drag to orbit · ⌘/Ctrl+wheel to zoom</span>
 </div>
 
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 <script>
-(async function(){
+(async () => {
   const canvas = document.getElementById('c');
-  const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, antialias: true });
+  const loading = document.getElementById('loading');
+  const select  = document.getElementById('model');
+  const resetBtn= document.getElementById('reset');
 
-  let scene = new BABYLON.Scene(engine);
-  scene.clearColor = new BABYLON.Color4(0.12, 0.14, 0.25, 1);
+  // Engine (WebGPU if available, else WebGL2)
+  let engine;
+  if ('gpu' in navigator) {
+    engine = new BABYLON.WebGPUEngine(canvas, {antialiasing:true});
+    await engine.initAsync();
+  } else {
+    engine = new BABYLON.Engine(canvas, true, {preserveDrawingBuffer:true, stencil:true});
+  }
 
-  const camera = new BABYLON.ArcRotateCamera("cam", -Math.PI/2, Math.PI/2.25, 2.5, BABYLON.Vector3.Zero(), scene);
-  camera.lowerRadiusLimit = 0.4;
-  camera.upperRadiusLimit = 10;
-  camera.wheelPrecision = 60;
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.12,0.14,0.27,1.0);
+
+  // Camera + lights
+  const camera = new BABYLON.ArcRotateCamera("cam",
+      -Math.PI/2, Math.PI/2.2, 2.5, BABYLON.Vector3.Zero(), scene);
+  camera.wheelPrecision = 60;        // smoother zoom
+  camera.minZ = 0.001;               // near plane for tiny models
   camera.attachControl(canvas, true);
 
-  new BABYLON.HemisphericLight("h", new BABYLON.Vector3(0.25, 1, -0.25), scene);
-  const dir = new BABYLON.DirectionalLight("d", new BABYLON.Vector3(-0.3,-1,-0.2), scene);
-  dir.intensity = 0.6;
+  const env = BABYLON.CubeTexture.CreateFromPrefilteredData(
+      "https://assets.babylonjs.com/environments/environmentSpecular.env", scene);
+  scene.environmentTexture = env;
+  scene.createDefaultLight(true); // hemi + directional
 
   let currentRoot = null;
 
-  async function loadModel(filename){
-    if (currentRoot) { currentRoot.dispose(); currentRoot = null; }
+  function frameAll() {
+    const meshes = scene.meshes.filter(m => m.getTotalVertices && m.getTotalVertices() > 0 && m.isEnabled());
+    if (!meshes.length) return;
 
-    // load glb in a fresh container so we can dispose easily
-    const container = await BABYLON.SceneLoader.LoadAssetContainerAsync("./", filename, scene);
-    currentRoot = new BABYLON.TransformNode("root", scene);
-    container.addAllToScene();
-    container.meshes.forEach(m => { if (m.parent === null) m.parent = currentRoot; });
+    const mm = BABYLON.Mesh.MinMax(meshes);
+    const center = mm.min.add(mm.max).scale(0.5);
+    const radius = mm.max.subtract(mm.min).length() * 0.5;
 
-    // compute bounds & center/scale nicely
-    const meshes = container.meshes.filter(m => m.getTotalVertices() > 0);
-    const min = new BABYLON.Vector3(+Infinity,+Infinity,+Infinity);
-    const max = new BABYLON.Vector3(-Infinity,-Infinity,-Infinity);
-    meshes.forEach(m => {
-      const info = m.getBoundingInfo();
-      min.minimizeInPlace(info.boundingBox.minimumWorld);
-      max.maximizeInPlace(info.boundingBox.maximumWorld);
-    });
-    const size = max.subtract(min);
-    const center = min.add(size.scale(0.5));
-
-    // recentre at origin
-    currentRoot.position = currentRoot.position.subtract(center);
-
-    // scale to roughly fit camera distance
-    const biggest = Math.max(size.x, size.y, size.z);
-    const targetSize = 1.2; // ~ desired unit size
-    const s = biggest > 0 ? (targetSize / biggest) : 1.0;
-    currentRoot.scaling = new BABYLON.Vector3(s, s, s);
-
-    // subtle ground shadow (blob)
-    const g = BABYLON.Mesh.CreateGround("g", 3, 3, 2, scene);
-    g.position.y = -0.6;
-    const ms = new BABYLON.StandardMaterial("gmat", scene);
-    ms.diffuseColor = new BABYLON.Color3(0,0,0);
-    ms.specularColor = new BABYLON.Color3(0,0,0);
-    ms.emissiveColor = new BABYLON.Color3(0,0,0);
-    ms.alpha = 0.0; // invisible ground (kept if you want contact feeling)
-    g.material = ms;
+    camera.setTarget(center);
+    camera.radius = Math.max(radius * 2.5, 0.1);
   }
 
-  // UI
-  const sel = document.getElementById('model');
-  const btn = document.getElementById('reset');
-  sel.addEventListener('change', () => loadModel(sel.value));
-  btn.addEventListener('click', () => {
-    camera.setPosition(new BABYLON.Vector3(0, 1.6, 3));
-    camera.target = BABYLON.Vector3.Zero();
-  });
+  async function loadModel(file) {
+    loading.classList.add('show');
+    if (currentRoot) { currentRoot.dispose(); currentRoot = null; }
 
-  await loadModel(sel.value);
+    // Load relative to this HTML file
+    const res = await BABYLON.SceneLoader.ImportMeshAsync("", "", file, scene);
+    currentRoot = res.meshes[0];              // __root__ node
 
-  engine.runRenderLoop(() => scene.render());
+    // Auto-rescale if model is absurdly small or huge
+    const geom = res.meshes.filter(m => m.getTotalVertices && m.getTotalVertices() > 0);
+    if (geom.length) {
+      const {min,max} = BABYLON.Mesh.MinMax(geom);
+      const size = max.subtract(min).length();
+      if (size < 0.01) { currentRoot.scaling.scaleInPlace(100); }   // tiny → enlarge
+      if (size > 1000) { currentRoot.scaling.scaleInPlace(0.01); }  // huge → shrink
+    }
+
+    // Ensure materials are visible even if textures missing
+    for (const m of scene.materials) {
+      if (m.alpha < 0.1) m.alpha = 1.0;
+      if (m.transparencyMode === BABYLON.PBRMaterial.MATERIAL_ALPHABLEND)
+        m.transparencyMode = null;
+    }
+    frameAll();
+    loading.classList.remove('show');
+  }
+
+  // UI wiring
+  select.addEventListener('change', () => loadModel(select.value));
+  resetBtn.addEventListener('click', frameAll);
+
+  // Resize
   window.addEventListener('resize', () => engine.resize());
+
+  // Start
+  await loadModel(select.value);     // default = poly.glb
+  engine.runRenderLoop(() => scene.render());
 })();
 </script>
 </body>
