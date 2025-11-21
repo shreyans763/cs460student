@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>A5 – WebGPU (Babylon.js)</title>
+  <style>
+    html,body { height:100%; margin:0; overflow:hidden; background:#000; }
+    canvas { width:100%; height:100%; display:block; }
+  </style>
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+  const canvas = document.getElementById('c');
+
+  // Try WebGPU; if not available, fall back to WebGL so your page still loads on GH Pages previews.
+  let engine;
+  if (navigator.gpu){
+    const { WebGPUEngine } = BABYLON;
+    engine = new WebGPUEngine(canvas, { antialiasing:true });
+    await engine.initAsync();
+  } else {
+    engine = new BABYLON.Engine(canvas, true, {preserveDrawingBuffer:true, stencil:true});
+  }
+
+  const scene = new BABYLON.Scene(engine);
+  await BABYLON.SceneLoader.AppendAsync('', 'poly.glb', scene);
+
+  scene.createDefaultCameraOrLight(true, true, true);
+  scene.activeCamera.alpha += 0.4;
+  scene.activeCamera.beta  = 1.1;
+
+  engine.runRenderLoop(() => scene.render());
+  addEventListener('resize', () => engine.resize());
+</script>
+</body>
+</html>
