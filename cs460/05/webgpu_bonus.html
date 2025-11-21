@@ -1,48 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <title>A5 — WebGPU PBR Bonus (Babylon.js)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>html,body{height:100%;margin:0;background:#0f1630}canvas{width:100%;height:100%}</style>
+  <meta charset="utf-8"/>
+  <title>A5 — WebGPU PBR Bonus</title>
+  <style>html,body,canvas{width:100%;height:100%;margin:0;display:block;background:#171c33}</style>
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
   <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
 </head>
 <body>
-<canvas id="c"></canvas>
-<script type="module">
-  const canvas = document.getElementById('c');
-  const engine = new BABYLON.WebGPUEngine(canvas, { antialiasing:true });
-  await engine.initAsync();
-  const scene = new BABYLON.Scene(engine);
-  scene.createDefaultEnvironment({ createGround:false, environmentIntensity:1.0 });
+  <canvas id="c"></canvas>
+  <script type="module">
+    const canvas = document.getElementById('c');
+    const engine = new BABYLON.WebGPUEngine(canvas,{antialiasing:true});
+    await engine.initAsync();
 
-  await BABYLON.SceneLoader.AppendAsync('', 'poly.glb', scene);
-  scene.createDefaultCameraOrLight(true, true, true);
-  scene.activeCamera.setTarget(BABYLON.Vector3.Zero());
-  scene.activeCamera.radius = 4;
+    const scene = new BABYLON.Scene(engine);
+    scene.createDefaultEnvironment({createSkybox:true,enableGroundShadow:true});
 
-  // Grab all meshes (exclude environment)
-  const meshes = scene.meshes.filter(m=>m.name !== 'BackgroundSkybox');
+    await BABYLON.SceneLoader.AppendAsync('', 'Shoe.glb', scene);
+    const mesh = scene.meshes.find(m=>m.name && m.name!=='__root__') || scene.meshes[0];
 
-  // Apply a shiny PBR to all loaded meshes
-  const pbr = new BABYLON.PBRMaterial('pbr', scene);
-  pbr.metallic = 0.1;
-  pbr.roughness = 0.35;
-  pbr.subSurface?.isRefractionEnabled && (pbr.subSurface.isRefractionEnabled = false);
-  pbr.environmentIntensity = 1.2;
+    const pbr = new BABYLON.PBRMaterial('pbr',scene);
+    pbr.metallic = 0.3;
+    pbr.roughness = 0.4;
+    pbr.subSurface.isRefractionEnabled = true;
+    pbr.subSurface.indexOfRefraction = 1.4;
+    pbr.environmentIntensity = 1.2;
+    mesh.material = pbr;
 
-  meshes.forEach(m => m.material = pbr);
+    scene.createDefaultCameraOrLight(true,true,true);
+    scene.activeCamera.alpha += 0.3;
 
-  // simple keyboard toggles
-  addEventListener('keydown', (e)=>{
-    if(e.key==='1'){ pbr.metallic = 0.0; pbr.roughness = 0.7; }         // matte
-    if(e.key==='2'){ pbr.metallic = 0.7; pbr.roughness = 0.25; }       // metallic
-    if(e.key==='3'){ pbr.metallic = 0.35; pbr.roughness = 0.05; }      // very glossy
-  });
-
-  engine.runRenderLoop(()=>scene.render());
-  addEventListener('resize', ()=>engine.resize());
-</script>
+    engine.runRenderLoop(()=>scene.render());
+    addEventListener('resize',()=>engine.resize());
+  </script>
 </body>
 </html>
