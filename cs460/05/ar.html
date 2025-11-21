@@ -1,0 +1,18 @@
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>A5 – AR (Shreyans)</title>
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src="https://cs460.org/js/aframe-ar.js"></script>
+    <style>body,html{margin:0;overflow:hidden}</style>
+  </head>
+  <body>
+    <a-scene embedded arjs>
+      <a-marker preset="hiro">
+        <a-entity position="0 0 0" rotation="0 0 0" scale="0.05 0.05 0.05"
+                  gltf-model="tinker_shoe.glb"></a-entity>
+      </a-marker>
+      <a-entity camera></a-entity>
+    </a-scene>
+  </body>
+</html>
