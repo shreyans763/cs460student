@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CS460 A5 – PolyCam + Blender (Shreyans)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body { height:100%; margin:0; }
+    body { background:#000; overflow:hidden; }
+    #overlay { position:fixed; left:12px; top:10px; color:#9ad; font-family:system-ui, Arial; font-size:14px; }
+    canvas { display:block; }
+  </style>
+  <!-- stats.js -->
+  <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
+</head>
+<body>
+<div id="overlay">Assignment 5 — PolyCam (left) + Blender (right)</div>
+
+<script type="module">
+  import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+  import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+  import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+  import { VertexNormalsHelper } from 'https://unpkg.com/three@0.160.0/examples/jsm/helpers/VertexNormalsHelper.js';
+  import { AnaglyphEffect } from 'https://unpkg.com/three@0.160.0/examples/jsm/effects/AnaglyphEffect.js';
+  import { Pane } from 'https://cdn.jsdelivr.net/npm/tweakpane@4.0.5/dist/tweakpane.min.js';
+
+  // ----- renderer, camera, scene
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 10000);
+  camera.position.set(0, 1.2, 8);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+
+  // controls
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+
+  // lighting
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  dirLight.position.set(3, 5, 4);
+  scene.add(dirLight);
+
+  const ambLight = new THREE.AmbientLight(0x404040, 0.75);
+  scene.add(ambLight);
+
+  // Anaglyph effect
+  const effect = new AnaglyphEffect(renderer);
+  effect.setSize(window.innerWidth, window.innerHeight);
+
+  // globals to expose to UI
+  window.SCENE = {
+    anaglyph:false,
+    poly:null,
+    blender:null,
+    blender_helper:null,
+    rotate_poly:false,
+    rotate_blender:false,
+    polyWireframe:false,
+    do_rotate_poly(){ this.rotate_poly = !this.rotate_poly; },
+    do_rotate_blender(){ this.rotate_blender = !this.rotate_blender; },
+    blender_old_material:null,
+    change_material(){
+      if (!this.blender) return;
+      if (!this.blender_old_material){
+        // store a clone, then use MeshNormalMaterial
+        this.blender_old_material = this.blender.material.clone();
+        this.blender.material = new THREE.MeshNormalMaterial();
+      } else {
+        this.blender.material = this.blender_old_material.clone();
+        this.blender_old_material = null;
+      }
+    },
+    uiColor: { ambient:'#666666' }, // color picker proxy
+  };
+
+  // helpers
+  const Y_AXIS = new THREE.Vector3(0,1,0);
+  const Q_ID   = new THREE.Quaternion(); // identity
+  const Q_180Y = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, Math.PI);
+
+  function setWireframe(obj, flag){
+    if (!obj) return;
+    if (Array.isArray(obj.material)){
+      obj.material.forEach(m => m.wireframe = flag);
+    } else if (obj.material){
+      obj.material.wireframe = flag;
+    }
+  }
+
+  // load models
+  const loader = new GLTFLoader();
+
+  // 1) PolyCam original
+  loader.load('poly.glb', (gltf) => {
+    let poly = gltf.scenes?.[0]?.children?.[0] ?? gltf.scene;
+    // normalize transform
+    poly.scale.set(10,10,10);
+    poly.quaternion.copy(Q_ID);
+    poly.position.set(-2.8, 0, 0);      // left side
+    poly.name = 'poly';
+    window.SCENE.poly = poly;
+    scene.add(poly);
+
+    // Build Poly UI when available
+    buildPolyUI();
+  });
+
+  // 2) Blender edited
+  loader.load('Shoe.glb', (gltf) => {
+    let blender = gltf.scenes?.[0]?.children?.[0] ?? gltf.scene;
+    blender.scale.set(10,10,10);
+    blender.quaternion.copy(Q_ID);
+    blender.position.set(+2.8, 0, 0);   // right side
+    blender.name = 'blender';
+    window.SCENE.blender = blender;
+    scene.add(blender);
+
+    // normals helper
+    const helper = new VertexNormalsHelper(blender, 0.05, 0x3366ff);
+    helper.visible = false;
+    scene.add(helper);
+    window.SCENE.blender_helper = helper;
+
+    // Build Blender UI when available
+    buildBlenderUI();
+  });
+
+  // ---------- UI (Tweakpane)
+  const pane = new Pane();
+  const sceneUI = pane.addFolder({ title:'Scene' });
+
+  // anaglyph
+  sceneUI.addBinding(window.SCENE, 'anaglyph', { label:'Anaglyph' });
+
+  // light sliders
+  sceneUI.addBinding(dirLight.position, 'x', {min:-20, max:20, label:'Light X'});
+  sceneUI.addBinding(dirLight.position, 'y', {min:-20, max:20, label:'Light Y'});
+  sceneUI.addBinding(dirLight.position, 'z', {min:-20, max:20, label:'Light Z'});
+  sceneUI.addBinding(dirLight, 'intensity', {min:0, max:3, label:'Dir Intensity'});
+  const amb = sceneUI.addBinding(window.SCENE, 'uiColor', {label:'Ambient', picker:true});
+  amb.on('change', ev => ambLight.color.set(ev.value.ambient));
+
+  function buildPolyUI(){
+    if (!window.SCENE.poly) return;
+    const polyUI = pane.addFolder({ title:'PolyCam Mesh' });
+    // wireframe toggle via proxy
+    polyUI.addBinding(window.SCENE, 'polyWireframe', {label:'Wireframe'})
+      .on('change', ev => setWireframe(window.SCENE.poly, ev.value));
+    polyUI.addButton({ title:'rotate!' }).on('click', () => window.SCENE.do_rotate_poly());
+  }
+
+  function buildBlenderUI(){
+    if (!window.SCENE.blender) return;
+    const blenderUI = pane.addFolder({ title:'Blender Mesh' });
+    blenderUI.addBinding(window.SCENE.blender_helper, 'visible', {label:'Show normals!'});
+    blenderUI.addButton({ title:'rotate!' }).on('click', () => window.SCENE.do_rotate_blender());
+    blenderUI.addButton({ title:'Change Material!' }).on('click', () => window.SCENE.change_material());
+  }
+
+  // stats widget
+  const stats = new Stats();
+  stats.dom.style.left = 'auto';
+  stats.dom.style.right = '10px';
+  document.body.appendChild(stats.dom);
+
+  // resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    effect.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // animate
+  const targetQ = new THREE.Quaternion();
+
+  function animate(){
+    requestAnimationFrame(animate);
+
+    // rotations with slerp
+    if (window.SCENE.poly){
+      targetQ.copy(window.SCENE.rotate_poly ? Q_180Y : Q_ID);
+      window.SCENE.poly.quaternion.slerp(targetQ, 0.05);
+    }
+    if (window.SCENE.blender){
+      targetQ.copy(window.SCENE.rotate_blender ? Q_180Y : Q_ID);
+      window.SCENE.blender.quaternion.slerp(targetQ, 0.05);
+      if (window.SCENE.blender_helper && window.SCENE.blender_helper.visible){
+        window.SCENE.blender_helper.update();
+      }
+    }
+
+    controls.update();
+    stats.update();
+
+    if (window.SCENE.anaglyph){
+      effect.render(scene, camera);
+    } else {
+      renderer.render(scene, camera);
+    }
+  }
+
+  animate();
+</script>
+</body>
+</html>
