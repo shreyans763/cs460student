@@ -5,154 +5,155 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>CS460 A5 — Three.js Viewer</title>
   <style>
-    html,body{height:100%;margin:0;background:#1b2040;color:#cfd6ff;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-    #hint{position:fixed;left:12px;top:12px;opacity:.9}
-    #ui{position:fixed;left:12px;bottom:12px;display:flex;gap:8px}
-    #ui select,#ui button{background:#11182e;color:#d7dbe8;border:1px solid #30364f;border-radius:8px;padding:6px 10px}
-    canvas{display:block}
+    :root{--bg:#1b2240;--panel:#0f1427;--text:#cfd6ff;--chip:#1f274a;}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;}
+    #hud{position:fixed;left:10px;top:8px;font-size:14px;opacity:.9;user-select:none}
+    #bar{position:fixed;left:10px;bottom:10px;display:flex;gap:8px;align-items:center;background:var(--panel);
+         padding:10px 12px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+    select,button{background:var(--chip);color:var(--text);border:1px solid #2c3564;border-radius:8px;padding:6px 10px}
+    button{cursor:pointer}
   </style>
 </head>
 <body>
-  <div id="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
-  <div id="ui">
-    <label style="display:flex;align-items:center;gap:6px">
-      <span>Model:</span>
-      <select id="model">
-        <option value="Shoe.glb">Shoe.glb (Blender)</option>
-        <option value="poly.glb">poly.glb (PolyCam)</option>
-      </select>
-    </label>
-    <button id="reset">Reset View</button>
+  <div id="hud">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
+  <div id="bar">
+    <span>Model:</span>
+    <select id="modelSel"></select>
+    <button id="resetBtn">Reset View</button>
   </div>
 
   <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-    import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
-    import { DRACOLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/DRACOLoader.js';
-    import { KTX2Loader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/KTX2Loader.js';
-    import MeshoptDecoder from 'https://cdn.jsdelivr.net/npm/meshoptimizer@0.20.0/meshopt_decoder.module.js';
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+    import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-    let scene, camera, renderer, controls, current;
+    // ---------- scene / renderer ----------
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1b2240);
 
-    init();
-    loadModel(document.getElementById('model').value);
+    const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 2000);
+    camera.position.set(1.6, 0.9, 2.2);
 
-    function init() {
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x202544);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(devicePixelRatio);
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
 
-      camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
-      camera.position.set(0.8, 0.5, 1.4);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
 
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.0;
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
+    // Lights (soft, neutral)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(2.0, 3.0, 2.5);
+    scene.add(dir);
 
-      // Simple lights
-      scene.add(new THREE.HemisphereLight(0xffffff, 0x444466, 1.0));
-      const dir = new THREE.DirectionalLight(0xffffff, 2.0);
-      dir.position.set(2, 4, 2);
-      scene.add(dir);
+    // ---------- loader & UI ----------
+    const loader = new GLTFLoader();
+    const MODELS = {
+      "Shoe.glb (Blender)": "Shoe.glb",
+      "poly.glb (PolyCam)": "poly.glb"
+    };
 
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.target.set(0, 0.25, 0);
-
-      // UI
-      window.addEventListener('resize', onResize);
-      document.getElementById('model').addEventListener('change', e => loadModel(e.target.value));
-      document.getElementById('reset').addEventListener('click', () => loadModel(document.getElementById('model').value));
-
-      animate();
+    const sel = document.getElementById('modelSel');
+    for (const k of Object.keys(MODELS)) {
+      const o = document.createElement('option');
+      o.value = MODELS[k];
+      o.textContent = k;
+      sel.appendChild(o);
     }
+    sel.value = "Shoe.glb"; // default
 
-    function makeLoader() {
-      const loader = new GLTFLoader().setPath('./');
+    document.getElementById('resetBtn').onclick = () => {
+      if (current) fitToView(current, 1.35);
+    };
+    sel.onchange = () => loadModel(sel.value);
 
-      // DRACO for compressed geometry
-      const draco = new DRACOLoader();
-      draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
-      loader.setDRACOLoader(draco);
+    let current = null;
 
-      // KTX2 (if textures are in .ktx2); harmless otherwise
-      const ktx2 = new KTX2Loader().setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/');
-      ktx2.detectSupport(renderer);
-      loader.setKTX2Loader(ktx2);
-
-      // Meshopt (if used)
-      loader.setMeshoptDecoder(MeshoptDecoder);
-
-      return loader;
-    }
-
-    function loadModel(filename) {
-      // dispose previous scene object
-      if (current) {
-        scene.remove(current);
-        current.traverse(o => {
-          if (o.geometry) o.geometry.dispose();
+    function disposeObject(root){
+      if(!root) return;
+      root.traverse(o=>{
+        if(o.isMesh){
+          o.geometry?.dispose?.();
           if (o.material) {
             const mats = Array.isArray(o.material) ? o.material : [o.material];
             for (const m of mats) {
-              for (const k in m) {
+              for (const k of Object.keys(m)) {
                 const v = m[k];
-                if (v && v.isTexture && v.dispose) v.dispose();
+                if (v && v.isTexture) v.dispose();
               }
-              if (m.dispose) m.dispose();
+              m.dispose?.();
             }
           }
-        });
-        current = null;
-      }
+        }
+      });
+    }
 
-      const loader = makeLoader();
-      loader.load(
-        filename,
-        (gltf) => {
+    function status(txt){
+      document.getElementById('hud').textContent = txt;
+      console.log(txt);
+    }
+
+    async function loadModel(url){
+      status(`Loading ${url} …`);
+      return new Promise((resolve,reject)=>{
+        loader.load(url, gltf=>{
+          // swap current
+          if (current) { scene.remove(current); disposeObject(current); }
           current = gltf.scene;
           scene.add(current);
-          fitCameraToObject(current);
-        },
-        undefined,
-        (err) => {
-          console.error('GLB load error:', err);
-          document.getElementById('hint').textContent = 'Failed to load model (see console).';
-        }
-      );
+          fitToView(current, 1.35);
+          status(`Loaded ${url}`);
+          resolve();
+        }, xhr=>{
+          const pct = xhr.total ? ((xhr.loaded/xhr.total)*100).toFixed(0) : '';
+          status(`Loading ${url} … ${pct}%`);
+        }, err=>{
+          status(`ERROR loading ${url} — see console`);
+          console.error(err);
+          reject(err);
+        });
+      });
     }
 
-    function fitCameraToObject(obj) {
-      const box = new THREE.Box3().setFromObject(obj);
-      const size = box.getSize(new THREE.Vector3()).length();
+    function fitToView(object, offset=1.25){
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
 
-      controls.reset();
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * (Math.PI/180);
+      let dist = (maxDim/2) / Math.tan(fov/2);
+      dist *= offset;
+
+      const dir = new THREE.Vector3(1, 0.5, 1).normalize();
+      camera.position.copy(center).add(dir.multiplyScalar(dist));
+      camera.near = Math.max(0.01, maxDim/200);
+      camera.far  = Math.max(500,  maxDim*50);
+      camera.updateProjectionMatrix();
+
       controls.target.copy(center);
-
-      // Keep a comfortable distance from the model
-      const dist = Math.max(size, 0.5);
-      camera.near = dist / 100;
-      camera.far = dist * 100;
-      camera.updateProjectionMatrix();
-
-      camera.position.copy(center).add(new THREE.Vector3(dist * 0.6, dist * 0.35, dist * 0.8));
+      controls.update();
     }
 
-    function onResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    // kick off
+    loadModel(sel.value);
 
-    function animate() {
+    // resize
+    addEventListener('resize', ()=>{
+      camera.aspect = innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    // render loop
+    (function animate(){
       requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
-    }
+    })();
   </script>
 </body>
 </html>
