@@ -5,11 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CS460 A5 — Three.js Viewer</title>
   <style>
-    html, body { margin: 0; height: 100%; background:#1b2141; color:#cbd5e1; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    #ui { position: fixed; left: 12px; bottom: 12px; display:flex; gap:8px; align-items:center; background:#0f172a88; padding:10px 12px; border-radius:12px; backdrop-filter: blur(6px); }
-    select, button { background:#0f172a; color:#cbd5e1; border:1px solid #29314f; border-radius:10px; padding:6px 10px; }
-    #hint { position: fixed; top:8px; left:8px; opacity:.85 }
-    canvas { display:block; }
+    html, body { margin:0; height:100%; background:#1b2141; color:#cbd5e1; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
+    #ui { position:fixed; left:12px; bottom:12px; display:flex; gap:8px; align-items:center; background:#0f172a88; padding:10px 12px; border-radius:12px; backdrop-filter:blur(6px) }
+    select, button { background:#0f172a; color:#cbd5e1; border:1px solid #29314f; border-radius:10px; padding:6px 10px }
+    #hint { position:fixed; top:8px; left:8px; opacity:.85 }
+    #overlay { position:fixed; inset:0; display:none; place-items:center; background:#0b1222cc; color:#fff; padding:24px; text-align:center; z-index:10 }
+    #overlay pre { text-align:left; max-width:min(900px,90vw); white-space:pre-wrap; word-break:break-word }
+    #toast { position:fixed; right:12px; bottom:12px; background:#0f172a; color:#cbd5e1; padding:8px 10px; border-radius:10px; opacity:.9; font-size:12px }
+    canvas { display:block }
   </style>
 </head>
 <body>
@@ -22,32 +25,55 @@
     </select>
     <button id="resetBtn">Reset View</button>
   </div>
+  <div id="overlay"><div>
+    <h3>Viewer error</h3>
+    <pre id="err"></pre>
+    <p>Hard refresh (⇧⌘R / Ctrl+F5). If it persists, check that the GLB files are in <code>cs460/05/</code>
+       and that the filenames and capitalization match exactly.</p>
+  </div></div>
+  <div id="toast" role="status" aria-live="polite">Loading…</div>
 
   <script type="module">
     import * as THREE from 'https://unpkg.com/three@0.160.1/build/three.module.js';
     import { OrbitControls } from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
     import { GLTFLoader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    const toast = document.getElementById('toast');
+    const overlay = document.getElementById('overlay');
+    const errpre = document.getElementById('err');
+    const say = (t)=>{ toast.textContent=t; };
+
+    function showError(e) {
+      overlay.style.display = 'grid';
+      errpre.textContent = (e && (e.stack || e.message || e.toString())) || 'Unknown error';
+      console.error(e);
+    }
+    window.addEventListener('error', e => showError(e.error || e.message || e));
+    window.addEventListener('unhandledrejection', e => showError(e.reason || e));
+
+    // renderer
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
     renderer.setSize(innerWidth, innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
 
+    // scene + camera
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1b2141);
 
     const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 100);
     camera.position.set(0.8, 0.5, 1.4);
 
+    // lights
     scene.add(new THREE.HemisphereLight(0xffffff, 0x334466, 0.6));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.1);
-    dir.position.set(2, 3, 2);
-    scene.add(dir);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.1); dir.position.set(2,3,2); scene.add(dir);
 
+    // controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
+    // loader + current model
     const loader = new GLTFLoader();
     let current = null;
 
@@ -57,45 +83,56 @@
       const center = box.getCenter(new THREE.Vector3());
       controls.target.copy(center);
       const dist = size * 0.9;
-      camera.position.copy(center).add(new THREE.Vector3(dist, dist * 0.6, dist));
-      camera.near = Math.max(size / 100, 0.001);
-      camera.far = size * 100;
+      camera.position.copy(center).add(new THREE.Vector3(dist, dist*0.6, dist));
+      camera.near = Math.max(0.001, size/100);
+      camera.far  = Math.max(10, size*100);
       camera.updateProjectionMatrix();
       controls.update();
     }
 
+    function clearCurrent() {
+      if (!current) return;
+      scene.remove(current);
+      current.traverse(o=>{
+        if (o.geometry) o.geometry.dispose();
+        if (o.material?.dispose) o.material.dispose();
+      });
+      current = null;
+    }
+
     function loadModel(url) {
-      if (current) {
-        scene.remove(current);
-        current.traverse(o => {
-          if (o.geometry) o.geometry.dispose();
-          if (o.material?.dispose) o.material.dispose();
-        });
-        current = null;
-      }
-      loader.load(url, (gltf) => {
+      say('Loading: ' + url);
+      clearCurrent();
+      loader.load(url, (gltf)=>{
+        say('Loaded: ' + url);
         current = gltf.scene;
-        current.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; }});
+        current.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
         scene.add(current);
         fitToObject(current);
-      }, undefined, (err) => console.error('Failed to load', url, err));
+        setTimeout(()=> say('Ready'), 500);
+      }, (ev)=>{
+        if (ev.total) say(`Loading: ${url} ${(100*ev.loaded/ev.total|0)}%`);
+      }, (err)=>{
+        showError(new Error('Failed to load ' + url + '\\n' + (err?.message || err)));
+      });
     }
 
+    // UI
     const sel = document.getElementById('modelSel');
-    document.getElementById('resetBtn').addEventListener('click', () => { if (current) fitToObject(current); });
-    sel.addEventListener('change', () => loadModel(sel.value));
+    const resetBtn = document.getElementById('resetBtn');
+    sel.addEventListener('change', ()=> loadModel(sel.value));
+    resetBtn.addEventListener('click', ()=> current && fitToObject(current));
 
+    // default model
     loadModel('Shoe.glb');
 
-    function tick() {
-      controls.update();
-      renderer.render(scene, camera);
-      requestAnimationFrame(tick);
-    }
+    // loop
+    function tick(){ controls.update(); renderer.render(scene,camera); requestAnimationFrame(tick); }
     tick();
 
-    addEventListener('resize', () => {
-      camera.aspect = innerWidth / innerHeight;
+    // resize
+    addEventListener('resize', ()=>{
+      camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
     });
