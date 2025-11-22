@@ -5,39 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CS460 A5 — Three.js Viewer</title>
   <style>
-    html, body { margin:0; height:100%; background:#1b2141; color:#cbd5e1; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-    #ui { position:fixed; left:12px; bottom:12px; display:flex; gap:8px; align-items:center; background:#0f172a88; padding:10px 12px; border-radius:12px; backdrop-filter:blur(6px); }
-    select, button { background:#0f172a; color:#cbd5e1; border:1px solid #29314f; border-radius:10px; padding:6px 10px; }
+    html, body { margin:0; height:100%; background:#1b2141; color:#cbd5e1; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
+    #ui { position:fixed; left:12px; bottom:12px; display:flex; gap:8px; align-items:center; background:#0f172a88; padding:10px 12px; border-radius:12px; backdrop-filter:blur(6px) }
+    select,button { background:#0f172a; color:#cbd5e1; border:1px solid #29314f; border-radius:10px; padding:6px 10px }
     #hint { position:fixed; top:8px; left:8px; opacity:.85 }
-    #error { position:fixed; top:8px; right:8px; background:#7f1d1d; color:#fff; padding:10px 12px; border-radius:10px; display:none; max-width:42ch; }
-    canvas { display:block; }
+    canvas { display:block }
   </style>
 </head>
 <body>
   <div id="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
-  <div id="error"></div>
   <div id="ui">
     <span>Model:</span>
     <select id="modelSel" aria-label="Choose model">
-      <option value="./Shoe.glb">Shoe.glb (Blender)</option>
-      <option value="./poly.glb">poly.glb (PolyCam)</option>
+      <option value="Shoe.glb">Shoe.glb (Blender)</option>
+      <option value="poly.glb">poly.glb (PolyCam)</option>
     </select>
     <button id="resetBtn">Reset View</button>
   </div>
 
   <script type="module">
     import * as THREE from 'https://unpkg.com/three@0.160.1/build/three.module.js';
-    import { OrbitControls }  from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
-    import { GLTFLoader }    from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
-    import { DRACOLoader }   from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/DRACOLoader.js';
-    import { MeshoptDecoder }from 'https://unpkg.com/three@0.160.1/examples/jsm/libs/meshopt_decoder.module.js';
-    import { KTX2Loader }    from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/KTX2Loader.js';
-
-    const errorBox = document.getElementById('error');
-    function showErr(msg) {
-      errorBox.textContent = msg;
-      errorBox.style.display = 'block';
-    }
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
+    import { GLTFLoader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/DRACOLoader.js';
+    import { KTX2Loader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/KTX2Loader.js';
+    import { MeshoptDecoder } from 'https://unpkg.com/three@0.160.1/examples/jsm/libs/meshopt_decoder.module.js';
 
     // renderer
     const renderer = new THREE.WebGLRenderer({ antialias:true });
@@ -49,88 +41,81 @@
     // scene + camera
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1b2141);
-
     const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 1000);
-    camera.position.set(1.2, 0.8, 1.8);
+    camera.position.set(1.2, 0.8, 1.6);
 
     // lights
     scene.add(new THREE.HemisphereLight(0xffffff, 0x334466, 0.6));
     const dir = new THREE.DirectionalLight(0xffffff, 1.1);
-    dir.position.set(2, 3, 2);
+    dir.position.set(2,3,2);
     scene.add(dir);
 
     // controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // loader (robust)
+    // loaders + decoders
     const loader = new GLTFLoader();
 
-    // Draco
     const draco = new DRACOLoader();
     draco.setDecoderPath('https://unpkg.com/three@0.160.1/examples/jsm/libs/draco/');
     loader.setDRACOLoader(draco);
 
-    // Meshopt
-    loader.setMeshoptDecoder(MeshoptDecoder);
-
-    // KTX2 (BasisU)
     const ktx2 = new KTX2Loader()
       .setTranscoderPath('https://unpkg.com/three@0.160.1/examples/jsm/libs/basis/')
       .detectSupport(renderer);
     loader.setKTX2Loader(ktx2);
 
+    loader.setMeshoptDecoder(MeshoptDecoder);
+
     let current = null;
 
     function fitToObject(obj) {
       const box = new THREE.Box3().setFromObject(obj);
-      if (!isFinite(box.getSize(new THREE.Vector3()).length())) return;
-
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const dist = maxDim * 1.5;
+      const radius = Math.max(size.x, size.y, size.z) * 0.5 || 1.0;
 
       controls.target.copy(center);
-      camera.position.copy(center).add(new THREE.Vector3(dist, dist * 0.7, dist));
-      camera.near = Math.max(0.01, maxDim / 1000);
-      camera.far  = Math.max(1000, 10 * maxDim);
+      const dist = radius * 3.2;
+      camera.position.copy(center).add(new THREE.Vector3(dist, dist*0.8, dist));
+      camera.near = Math.max(radius / 200, 0.001);
+      camera.far  = Math.max(radius * 400, 10);
       camera.updateProjectionMatrix();
       controls.update();
     }
 
-    function dispose(node){
-      node.traverse(o=>{
-        if (o.geometry) o.geometry.dispose();
-        if (o.material){
+    function disposeObject(root) {
+      root.traverse(o => {
+        if (o.isMesh) {
+          o.geometry?.dispose?.();
           const m = o.material;
-          if (Array.isArray(m)) m.forEach(mm=>mm.dispose?.());
-          else m.dispose?.();
+          if (Array.isArray(m)) m.forEach(mm => mm.dispose?.());
+          else m?.dispose?.();
         }
       });
     }
 
     function loadModel(url) {
-      errorBox.style.display = 'none';
-      if (current) { scene.remove(current); dispose(current); current = null; }
-      loader.load(url, (gltf)=>{
-        current = gltf.scene || gltf.scenes[0];
+      if (current) { disposeObject(current); scene.remove(current); current = null; }
+      loader.load(url, (gltf) => {
+        current = gltf.scene || gltf.scenes?.[0];
         scene.add(current);
         fitToObject(current);
-      }, undefined, (err)=>{
-        console.error('GLB load failed:', err);
-        showErr(`Failed to load "${url}". This file may require Draco/Meshopt/KTX2. (See console for details.)`);
+      }, undefined, (err) => {
+        console.error('Failed to load', url, err);
+        alert('Failed to load ' + url + ' — see console for details.');
       });
     }
 
-    // UI
+    // UI hooks
     const sel = document.getElementById('modelSel');
     const resetBtn = document.getElementById('resetBtn');
-    sel.addEventListener('change', ()=> loadModel(sel.value));
-    resetBtn.addEventListener('click', ()=> current && fitToObject(current));
+    sel.addEventListener('change', () => loadModel(sel.value));
+    resetBtn.addEventListener('click', () => { if (current) fitToObject(current); });
 
     // default
-    loadModel('./Shoe.glb');
+    loadModel('Shoe.glb');
 
     // loop
     function tick(){
@@ -141,7 +126,7 @@
     tick();
 
     // resize
-    addEventListener('resize', ()=>{
+    addEventListener('resize', () => {
       camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
