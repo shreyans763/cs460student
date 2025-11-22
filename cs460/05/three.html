@@ -5,12 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CS460 A5 — Three.js Viewer</title>
   <style>
-    html, body { margin: 0; height: 100%; background:#1b2141; color:#cbd5e1; font: 14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-    #ui { position: fixed; left: 12px; bottom: 12px; display:flex; gap:8px; align-items:center; background:#0f172a88; padding:10px 12px; border-radius:12px; backdrop-filter: blur(6px); }
-    select, button { background:#0f172a; color:#cbd5e1; border:1px solid #29314f; border-radius:10px; padding:6px 10px; }
-    #hint { position: fixed; top:8px; left:8px; opacity:.85 }
-    canvas { display:block; }
+    html, body { margin:0; height:100%; background:#1b2141; color:#cbd5e1; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
+    #ui { position:fixed; left:12px; bottom:12px; display:flex; gap:8px; align-items:center; background:#0f172a88; padding:10px 12px; border-radius:12px; backdrop-filter:blur(6px) }
+    select,button { background:#0f172a; color:#cbd5e1; border:1px solid #29314f; border-radius:10px; padding:6px 10px }
+    #hint { position:fixed; top:8px; left:8px; opacity:.85 }
+    canvas { display:block }
   </style>
+
+  <!-- Map bare specifiers to CDN URLs so addons can import 'three' -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.1/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.1/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <div id="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
@@ -24,11 +34,11 @@
   </div>
 
   <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.160.1/build/three.module.js';
-    import { OrbitControls } from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
-    import { GLTFLoader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -40,7 +50,7 @@
     const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 100);
     camera.position.set(0.8, 0.5, 1.4);
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x334466, 0.6); scene.add(hemi);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x334466, 0.6));
     const dir = new THREE.DirectionalLight(0xffffff, 1.1); dir.position.set(2,3,2); scene.add(dir);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -49,46 +59,43 @@
     const loader = new GLTFLoader();
     let current = null;
 
-    function fitToObject(obj) {
+    function fitToObject(obj){
       const box = new THREE.Box3().setFromObject(obj);
       const size = box.getSize(new THREE.Vector3()).length();
       const center = box.getCenter(new THREE.Vector3());
       controls.target.copy(center);
       const dist = size * 0.9;
-      camera.position.copy(center).add(new THREE.Vector3(dist, dist * 0.6, dist));
-      camera.near = size / 100;
-      camera.far = size * 100;
-      camera.updateProjectionMatrix();
+      camera.position.copy(center).add(new THREE.Vector3(dist, dist*0.6, dist));
+      camera.near = size/100; camera.far = size*100; camera.updateProjectionMatrix();
       controls.update();
     }
 
-    function loadModel(url) {
-      if (current) {
+    function loadModel(url){
+      if (current){
         scene.remove(current);
         current.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material?.dispose) o.material.dispose(); });
         current = null;
       }
       loader.load(url, (gltf) => {
         current = gltf.scene;
-        current.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+        current.traverse(o => { if (o.isMesh){ o.castShadow = o.receiveShadow = true; }});
         scene.add(current);
         fitToObject(current);
-      }, undefined, (err) => console.error('Failed to load', url, err));
+      }, undefined, (e)=>console.error('Failed to load', url, e));
     }
 
     const sel = document.getElementById('modelSel');
     const resetBtn = document.getElementById('resetBtn');
-    sel.addEventListener('change', () => loadModel(sel.value));
-    resetBtn.addEventListener('click', () => { if (current) fitToObject(current); });
+    sel.addEventListener('change', ()=>loadModel(sel.value));
+    resetBtn.addEventListener('click', ()=>{ if (current) fitToObject(current); });
 
     loadModel('Shoe.glb');
 
     function tick(){ controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick); }
     tick();
 
-    addEventListener('resize', () => {
-      camera.aspect = innerWidth / innerHeight;
-      camera.updateProjectionMatrix();
+    addEventListener('resize', ()=>{
+      camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
     });
   </script>
