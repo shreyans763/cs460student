@@ -1,29 +1,33 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CS460 A5 - AR (Quick Look)</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CS460 A5 — AR (model-viewer)</title>
+  <script type="module" src="https://unpkg.com/@google/model-viewer@3.3.0/dist/model-viewer.min.js"></script>
   <style>
-    body{margin:0;background:#0b1028;color:#e2e8f0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-    .wrap{max-width:780px;margin:48px auto;padding:0 16px}
-    .card{background:#121936;border:1px solid #263156;border-radius:14px;padding:18px}
-    a.button{display:inline-block;margin-top:12px;padding:10px 14px;border-radius:12px;
-      background:#1e2a57;color:#e2e8f0;text-decoration:none;border:1px solid #2f3c6e}
+    html,body { height:100%; margin:0; background:#111827; color:#e5e7eb; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    #wrap { position:fixed; inset:0; display:grid; place-items:center; }
+    model-viewer { width: min(100vw, 1000px); height: min(100vh, 700px); }
+    #hint { position:fixed; top:10px; left:10px; opacity:.85 }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>CS460 A5 — View Shoe in AR</h1>
-    <p>On iPhone/iPad (Safari), tap the button to open Apple Quick Look.</p>
+  <div id="hint">Tip: on iPhone Safari tap <b>AR</b>; on Android Chrome tap <b>View in your space</b>.</div>
 
-    <!-- Quick Look trigger -->
-    <a class="button" rel="ar" href="Shoe.usdz">Open in AR (Quick Look)</a>
-
-    <p style="opacity:.8;margin-top:14px">
-      If you’re not on iOS, you can still download the file:
-      <a href="Shoe.usdz">Shoe.usdz</a>.
-    </p>
+  <div id="wrap">
+    <model-viewer id="mv"
+      src="Shoe.glb"
+      ios-src="Shoe.usdz"
+      ar ar-modes="quick-look scene-viewer webxr"
+      camera-controls autoplay
+      exposure="1.1" shadow-intensity="1" environment-image="neutral"
+      poster=""
+      alt="Shoe model">
+      <button slot="ar-button" style="position:absolute; left:50%; bottom:16px; transform:translateX(-50%); padding:10px 14px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#e5e7eb;">
+        View in AR
+      </button>
+    </model-viewer>
   </div>
 </body>
 </html>
