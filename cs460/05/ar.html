@@ -1,19 +1,29 @@
 <!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>A5 — AR (A-Frame + AR.js)</title>
-    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    <script src="https://cs460.org/js/aframe-ar.js"></script>
-    <style>html,body{margin:0;height:100%;overflow:hidden}</style>
-  </head>
-  <body>
-    <a-scene embedded arjs>
-      <a-marker preset="hiro">
-        <a-entity position="0 0 0" rotation="0 0 0" scale="0.05 0.05 0.05"
-                  gltf-model="tinker_shoe.glb"></a-entity>
-      </a-marker>
-      <a-entity camera></a-entity>
-    </a-scene>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CS460 A5 - AR (Quick Look)</title>
+  <style>
+    body{margin:0;background:#0b1028;color:#e2e8f0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .wrap{max-width:780px;margin:48px auto;padding:0 16px}
+    .card{background:#121936;border:1px solid #263156;border-radius:14px;padding:18px}
+    a.button{display:inline-block;margin-top:12px;padding:10px 14px;border-radius:12px;
+      background:#1e2a57;color:#e2e8f0;text-decoration:none;border:1px solid #2f3c6e}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>CS460 A5 — View Shoe in AR</h1>
+    <p>On iPhone/iPad (Safari), tap the button to open Apple Quick Look.</p>
+
+    <!-- Quick Look trigger -->
+    <a class="button" rel="ar" href="Shoe.usdz">Open in AR (Quick Look)</a>
+
+    <p style="opacity:.8;margin-top:14px">
+      If you’re not on iOS, you can still download the file:
+      <a href="Shoe.usdz">Shoe.usdz</a>.
+    </p>
+  </div>
+</body>
 </html>
