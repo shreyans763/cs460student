@@ -1,9 +1,10 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <title>A5 — WebGPU PBR Bonus</title>
-  <style>html,body,canvas{width:100%;height:100%;margin:0;display:block;background:#171c33}</style>
+  <meta charset="utf-8">
+  <title>CS460 A5 — WebGPU Bonus (Babylon PBR)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>html,body,canvas{height:100%;margin:0;background:#0c1740;display:block}</style>
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
   <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
 </head>
@@ -13,26 +14,26 @@
     const canvas = document.getElementById('c');
     const engine = new BABYLON.WebGPUEngine(canvas,{antialiasing:true});
     await engine.initAsync();
-
     const scene = new BABYLON.Scene(engine);
-    scene.createDefaultEnvironment({createSkybox:true,enableGroundShadow:true});
-
-    await BABYLON.SceneLoader.AppendAsync('', 'Shoe.glb', scene);
-    const mesh = scene.meshes.find(m=>m.name && m.name!=='__root__') || scene.meshes[0];
-
-    const pbr = new BABYLON.PBRMaterial('pbr',scene);
-    pbr.metallic = 0.3;
-    pbr.roughness = 0.4;
-    pbr.subSurface.isRefractionEnabled = true;
-    pbr.subSurface.indexOfRefraction = 1.4;
-    pbr.environmentIntensity = 1.2;
-    mesh.material = pbr;
-
+    await BABYLON.SceneLoader.AppendAsync('', 'poly.glb', scene);
+    const env = await BABYLON.CubeTexture.CreateFromPrefilteredDataAsync("https://playground.babylonjs.com/textures/environment.dds", scene);
+    scene.environmentTexture = env;
     scene.createDefaultCameraOrLight(true,true,true);
-    scene.activeCamera.alpha += 0.3;
+    scene.activeCamera.attachControl(canvas,true);
+
+    // apply shiny PBR to all meshes
+    scene.meshes.forEach(m=>{
+      if(m.material){
+        const pbr = new BABYLON.PBRMetallicRoughnessMaterial("pbr", scene);
+        pbr.baseColor = new BABYLON.Color3(0.95,0.95,1.0);
+        pbr.metallic = 0.3;
+        pbr.roughness = 0.25;
+        m.material = pbr;
+      }
+    });
 
     engine.runRenderLoop(()=>scene.render());
-    addEventListener('resize',()=>engine.resize());
+    addEventListener('resize', ()=>engine.resize());
   </script>
 </body>
 </html>
