@@ -214,3 +214,5 @@ __marimo__/
 *.bak
 .bak
 .DS_Store
+.bak
+.DS_Store

@@ -1,33 +1,56 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CS460 A5 — AR (model-viewer)</title>
-  <script type="module" src="https://unpkg.com/@google/model-viewer@3.3.0/dist/model-viewer.min.js"></script>
-  <style>
-    html,body { height:100%; margin:0; background:#111827; color:#e5e7eb; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-    #wrap { position:fixed; inset:0; display:grid; place-items:center; }
-    model-viewer { width: min(100vw, 1000px); height: min(100vh, 700px); }
-    #hint { position:fixed; top:10px; left:10px; opacity:.85 }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>A5 — AR (Quick Look + Scene Viewer)</title>
+<style>
+  body{margin:0;background:#0b1224;color:#cbd5e1;font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:900px;margin:40px auto;padding:0 16px}
+  .row{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+  .card{background:#0f172a;border:1px solid #243045;border-radius:14px;padding:16px}
+  a.btn{display:inline-block;padding:10px 14px;border-radius:10px;background:#243045;color:#e2e8f0;text-decoration:none}
+  img{max-width:100%;display:block;border-radius:12px}
+  code{background:#111827;padding:2px 6px;border-radius:6px}
+</style>
 </head>
 <body>
-  <div id="hint">Tip: on iPhone Safari tap <b>AR</b>; on Android Chrome tap <b>View in your space</b>.</div>
+<div class="wrap">
+  <h1>AR: View my Shoe in your space</h1>
+  <p>On iPhone/iPad: tap <em>View in AR</em>. On Android: tap <em>Open in Scene Viewer</em>. On desktop, scan the QR with your phone.</p>
 
-  <div id="wrap">
-    <model-viewer id="mv"
-      src="Shoe.glb"
-      ios-src="Shoe.usdz"
-      ar ar-modes="quick-look scene-viewer webxr"
-      camera-controls autoplay
-      exposure="1.1" shadow-intensity="1" environment-image="neutral"
-      poster=""
-      alt="Shoe model">
-      <button slot="ar-button" style="position:absolute; left:50%; bottom:16px; transform:translateX(-50%); padding:10px 14px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#e5e7eb;">
-        View in AR
-      </button>
-    </model-viewer>
+  <div class="card">
+    <h3>Apple (iOS/iPadOS)</h3>
+    <a class="btn" rel="ar" href="Shoe.usdz">View in AR (Quick Look)</a>
+    <p style="opacity:.8;margin-top:8px">If nothing happens, open this page in Safari on your iPhone/iPad.</p>
   </div>
+
+  <div class="card">
+    <h3>Android</h3>
+    <a class="btn" href="intent://arvr.google.com/scene-viewer/1.0?file=https%3A%2F%2Fshreyans763.github.io%2Fcs460student%2Fcs460%2F05%2Fpoly.glb&mode=ar_preferred#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=https%3A%2F%2Fshreyans763.github.io%2Fcs460student%2Fcs460%2F05%2Fthree.html;end;">
+      Open in Scene Viewer
+    </a>
+  </div>
+
+  <div class="card row">
+    <div style="flex:1 1 280px">
+      <h3>Desktop → Phone</h3>
+      <p>Open this URL on your phone:</p>
+      <code>https://shreyans763.github.io/cs460student/cs460/05/ar.html</code>
+      <p style="opacity:.8">Or scan the QR.</p>
+    </div>
+    <div style="flex:0 0 220px">
+      <img alt="QR to this page"
+           src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https%3A%2F%2Fshreyans763.github.io%2Fcs460student%2Fcs460%2F05%2Far.html"/>
+    </div>
+  </div>
+
+  <p class="card">Assets:
+    <a href="Shoe.glb">Shoe.glb</a> ·
+    <a href="Shoe.stl">Shoe.stl</a> ·
+    <a href="Shoe_print.stl">Shoe_print.stl</a> ·
+    <a href="Shoe.usdz">Shoe.usdz</a>
+  </p>
+</div>
 </body>
 </html>
