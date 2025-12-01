@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CS460 A5 — Three.js Viewer</title>
   <style>
-    html,body{margin:0;height:100%;background:#1b2141;color:#cbd5e1;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-    #ui{position:fixed;left:12px;bottom:12px;display:flex;gap:8px;align-items:center;background:#0f172a88;padding:10px 12px;border-radius:12px;backdrop-filter:blur(6px)}
-    select,button{background:#0f172a;color:#cbd5e1;border:1px solid #29314f;border-radius:10px;padding:6px 10px}
-    #hint{position:fixed;top:8px;left:8px;opacity:.85}
-    canvas{display:block}
+    html, body { margin:0; height:100%; background:#0f1837; color:#cbd5e1; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
+    #hint { position:fixed; top:8px; left:8px; opacity:.85 }
+    #ui   { position:fixed; left:12px; bottom:12px; display:flex; gap:8px; align-items:center; background:#0b122a99; padding:10px 12px; border-radius:12px; backdrop-filter:blur(6px) }
+    select,button { background:#0f172a; color:#cbd5e1; border:1px solid #29314f; border-radius:10px; padding:6px 10px }
+    #err { position:fixed; right:12px; bottom:12px; max-width:38ch; background:#2a0f12; color:#ffd7d7; padding:10px 12px; border-radius:10px; border:1px solid #5b1d24; display:none; white-space:pre-wrap }
+    canvas { display:block }
   </style>
 </head>
 <body>
   <div id="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
+
   <div id="ui">
     <span>Model:</span>
     <select id="modelSel" aria-label="Choose model">
@@ -23,25 +25,36 @@
     <button id="resetBtn">Reset View</button>
   </div>
 
+  <div id="err"></div>
+
   <script type="module">
+    const showErr = (msg) => {
+      const box = document.getElementById('err');
+      box.textContent = msg;
+      box.style.display = 'block';
+      console.error(msg);
+    };
+    window.addEventListener('error', e => showErr(String(e.error || e.message || e)));
+
     import * as THREE from 'https://unpkg.com/three@0.160.1/build/three.module.js';
     import { OrbitControls } from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
     import { GLTFLoader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1b2141);
+    scene.background = new THREE.Color(0x0f1837);
 
-    const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 100);
-    camera.position.set(0.8, 0.5, 1.4);
+    const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 1000);
+    camera.position.set(1.2, 0.8, 1.8);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x334466, 0.6));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.1); dir.position.set(2,3,2); scene.add(dir);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x334466, 0.6);
+    const dir  = new THREE.DirectionalLight(0xffffff, 1.2); dir.position.set(2,3,2);
+    scene.add(hemi, dir);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -49,39 +62,61 @@
     const loader = new GLTFLoader();
     let current = null;
 
-    function fitToObject(obj) {
+    function fitTo(obj) {
       const box = new THREE.Box3().setFromObject(obj);
-      const size = box.getSize(new THREE.Vector3()).length();
-      const center = box.getCenter(new THREE.Vector3());
-      controls.target.copy(center);
-      const dist = size * 0.9;
-      camera.position.copy(center).add(new THREE.Vector3(dist, dist * 0.6, dist));
-      camera.near = size / 100; camera.far = size * 100; camera.updateProjectionMatrix();
-      controls.update();
+      if (!box.isEmpty()) {
+        const size = box.getSize(new THREE.Vector3()).length();
+        const center = box.getCenter(new THREE.Vector3());
+        controls.target.copy(center);
+        const dist = size * 0.9;
+        camera.position.copy(center).add(new THREE.Vector3(dist, dist*0.6, dist));
+        camera.near = Math.max(0.01, size/100);
+        camera.far  = Math.max(10, size*100);
+        camera.updateProjectionMatrix();
+        controls.update();
+      }
     }
 
-    function loadModel(url) {
-      if (current) {
-        scene.remove(current);
-        current.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material?.dispose) o.material.dispose(); });
-        current = null;
+    function unload() {
+      if (!current) return;
+      scene.remove(current);
+      current.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for (const m of mats) if (m && m.dispose) m.dispose();
+        }
+      });
+      current = null;
+    }
+
+    async function loadModel(url) {
+      try {
+        unload();
+        const gltf = await loader.loadAsync(url);
+        current = gltf.scene;
+        current.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+        scene.add(current);
+        fitTo(current);
+      } catch (e) {
+        showErr(`Failed to load ${url}\n\n${e?.message || e}`);
       }
-      loader.load(url, gltf => { current = gltf.scene; scene.add(current); fitToObject(current); },
-        undefined, err => console.error('Failed to load', url, err));
     }
 
     const sel = document.getElementById('modelSel');
     const resetBtn = document.getElementById('resetBtn');
     sel.addEventListener('change', () => loadModel(sel.value));
-    resetBtn.addEventListener('click', () => { if (current) fitToObject(current); });
+    resetBtn.addEventListener('click', () => current && fitTo(current));
 
-    loadModel('Shoe.glb');
+    // initial load
+    loadModel(sel.value || 'Shoe.glb');
 
     function tick(){ controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick); }
     tick();
 
     addEventListener('resize', () => {
-      camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+      camera.aspect = innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
     });
   </script>
