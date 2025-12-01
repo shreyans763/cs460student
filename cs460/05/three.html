@@ -1,203 +1,89 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CS460 A5 — Three.js (Part 3 full)</title>
-<style>
-  html,body{margin:0;height:100%;background:#0b1440;color:#cbd5e1;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  #hint{position:fixed;left:8px;top:8px;opacity:.85}
-  canvas{display:block}
-  #ui{position:fixed;left:12px;bottom:12px;display:flex;gap:8px;background:#0f172a88;padding:10px 12px;border-radius:12px;backdrop-filter:blur(6px)}
-  #ui button{background:#0f172a;color:#cbd5e1;border:1px solid #29314f;border-radius:10px;padding:6px 10px}
-</style>
-<!-- stats.js (UMD) -->
-<script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CS460 A5 — Three.js Viewer</title>
+  <style>
+    html,body{margin:0;height:100%;background:#1b2141;color:#cbd5e1;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    #ui{position:fixed;left:12px;bottom:12px;display:flex;gap:8px;align-items:center;background:#0f172a88;padding:10px 12px;border-radius:12px;backdrop-filter:blur(6px)}
+    select,button{background:#0f172a;color:#cbd5e1;border:1px solid #29314f;border-radius:10px;padding:6px 10px}
+    #hint{position:fixed;top:8px;left:8px;opacity:.85}
+    canvas{display:block}
+  </style>
 </head>
 <body>
-<div id="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
-<div id="ui">
-  <button id="resetBtn">Reset View</button>
-</div>
+  <div id="hint">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
+  <div id="ui">
+    <span>Model:</span>
+    <select id="modelSel" aria-label="Choose model">
+      <option value="Shoe.glb">Shoe.glb (Blender)</option>
+      <option value="poly.glb">poly.glb (PolyCam)</option>
+    </select>
+    <button id="resetBtn">Reset View</button>
+  </div>
 
-<script type="module">
-import * as THREE from 'https://unpkg.com/three@0.160.1/build/three.module.js';
-import { OrbitControls } from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
-import { VertexNormalsHelper } from 'https://unpkg.com/three@0.160.1/examples/jsm/helpers/VertexNormalsHelper.js';
-import { AnaglyphEffect } from 'https://unpkg.com/three@0.160.1/examples/jsm/effects/AnaglyphEffect.js';
-import { Pane } from 'https://cdn.jsdelivr.net/npm/tweakpane@4.0.5/dist/tweakpane.min.js';
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.1/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js';
+    import { GLTFLoader } from 'https://unpkg.com/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
 
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.setSize(innerWidth,innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-document.body.appendChild(renderer.domElement);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b1440);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1b2141);
 
-const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 1000);
-camera.position.set(4, 2, 6);
+    const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 100);
+    camera.position.set(0.8, 0.5, 1.4);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x334466, 0.6));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.1); dir.position.set(2,3,2); scene.add(dir);
 
-const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.5); scene.add(hemi);
-const dir = new THREE.DirectionalLight(0xffffff, 1.2); dir.position.set(4,5,3); scene.add(dir);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
 
-const ambient = new THREE.AmbientLight(0x111827, 0.8); scene.add(ambient);
+    const loader = new GLTFLoader();
+    let current = null;
 
-const loader = new GLTFLoader();
-
-window.SCENE = {
-  anaglyph:false,
-  poly:null,
-  blender:null,
-  blender_helper:null,
-  poly_rotate:false,
-  blender_rotate:false,
-  blender_old_material:null,
-  do_rotate_poly(){ this.poly_rotate = !this.poly_rotate; },
-  do_rotate_blender(){ this.blender_rotate = !this.blender_rotate; },
-  change_material(){
-    if(!this.blender) return;
-    if(!this.blender_old_material){
-      this.blender_old_material = this.blender.material.clone();
-      this.blender.material = new THREE.MeshNormalMaterial();
-    }else{
-      this.blender.material = this.blender_old_material.clone();
-      this.blender_old_material = null;
+    function fitToObject(obj) {
+      const box = new THREE.Box3().setFromObject(obj);
+      const size = box.getSize(new THREE.Vector3()).length();
+      const center = box.getCenter(new THREE.Vector3());
+      controls.target.copy(center);
+      const dist = size * 0.9;
+      camera.position.copy(center).add(new THREE.Vector3(dist, dist * 0.6, dist));
+      camera.near = size / 100; camera.far = size * 100; camera.updateProjectionMatrix();
+      controls.update();
     }
-  },
-  set_poly_wireframe(flag){
-    if(!this.poly) return;
-    this.poly.traverse(o=>{
-      if(o.isMesh && o.material){
-        if(Array.isArray(o.material)) o.material.forEach(m=>m.wireframe=flag);
-        else o.material.wireframe = flag;
+
+    function loadModel(url) {
+      if (current) {
+        scene.remove(current);
+        current.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material?.dispose) o.material.dispose(); });
+        current = null;
       }
-    });
-  }
-};
-
-// load poly.glb (left)
-loader.load('poly.glb', (gltf)=>{
-  const m = gltf.scene;
-  normalize(m);
-  m.position.x = -1.8;
-  scene.add(m);
-  window.SCENE.poly = m;
-});
-
-// load Shoe.glb (right)
-loader.load('Shoe.glb', (gltf)=>{
-  const m = gltf.scene;
-  normalize(m);
-  m.position.x = +1.8;
-  scene.add(m);
-  window.SCENE.blender = m;
-
-  // normals helper (hidden initially)
-  const helper = new VertexNormalsHelper(m, 0.08);
-  helper.visible = false;
-  scene.add(helper);
-  window.SCENE.blender_helper = helper;
-});
-
-// normalize: remove rotation, scale ~10, recenter a bit
-function normalize(obj){
-  obj.traverse(o=>{
-    if(o.isMesh){ o.castShadow = o.receiveShadow = true; }
-  });
-  // identity quaternion
-  obj.quaternion.set(0,0,0,1);
-  // scale ~10
-  obj.scale.setScalar(10);
-  // recentre to its bounding box center
-  const box = new THREE.Box3().setFromObject(obj);
-  const c = box.getCenter(new THREE.Vector3());
-  obj.position.sub(c.multiplyScalar(1/10)); // compensate after scale
-}
-
-// UI (Tweakpane)
-const pane = new Pane();
-const sceneUI = pane.addFolder({title:'Scene'});
-sceneUI.addBinding(window.SCENE,'anaglyph',{label:'Anaglyph'});
-sceneUI.addBinding(dir.position,'x',{min:-20,max:20,label:'Light X'});
-sceneUI.addBinding(dir.position,'y',{min:-20,max:20,label:'Light Y'});
-sceneUI.addBinding(dir.position,'z',{min:-20,max:20,label:'Light Z'});
-sceneUI.addBinding(dir,'intensity',{min:0,max:3,label:'Dir Intensity'});
-
-// ambient color binding via small proxy
-const amb = { color:'#111827', intensity:ambient.intensity };
-sceneUI.addBinding(amb,'color',{label:'Ambient'}).on('change',ev=>{
-  ambient.color.set(ev.value);
-});
-sceneUI.addBinding(ambient,'intensity',{min:0,max:2,label:'Amb Intensity'});
-
-const polyUI = pane.addFolder({title:'PolyCam Mesh'});
-polyUI.addBinding({wire:false},'wire',{label:'Wireframe'}).on('change',ev=>{
-  window.SCENE.set_poly_wireframe(ev.value);
-});
-polyUI.addButton({title:'rotate!'}).on('click', ()=>window.SCENE.do_rotate_poly());
-
-const blenderUI = pane.addFolder({title:'Blender Mesh'});
-blenderUI.addBinding({normals:false},'normals',{label:'Show normals!'}).on('change',ev=>{
-  if(window.SCENE.blender_helper) window.SCENE.blender_helper.visible = ev.value;
-});
-blenderUI.addButton({title:'rotate!'}).on('click', ()=>window.SCENE.do_rotate_blender());
-blenderUI.addButton({title:'Change Material!'}).on('click', ()=>window.SCENE.change_material());
-
-// anaglyph
-const effect = new AnaglyphEffect( renderer );
-effect.setSize( innerWidth, innerHeight );
-
-// stats
-const stats = new Stats();
-document.body.appendChild(stats.domElement);
-
-// reset camera
-document.getElementById('resetBtn').addEventListener('click', ()=>{
-  camera.position.set(4,2,6);
-  controls.target.set(0,0,0);
-  controls.update();
-});
-
-// animate
-const q180 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI);
-const qIdent = new THREE.Quaternion(0,0,0,1);
-
-function tick(){
-  stats.begin();
-
-  if(window.SCENE.poly){
-    const target = window.SCENE.poly_rotate ? q180 : qIdent;
-    window.SCENE.poly.quaternion.slerp(target, 0.03);
-  }
-  if(window.SCENE.blender){
-    const target = window.SCENE.blender_rotate ? q180 : qIdent;
-    window.SCENE.blender.quaternion.slerp(target, 0.03);
-    if(window.SCENE.blender_helper && window.SCENE.blender_helper.visible){
-      window.SCENE.blender_helper.update();
+      loader.load(url, gltf => { current = gltf.scene; scene.add(current); fitToObject(current); },
+        undefined, err => console.error('Failed to load', url, err));
     }
-  }
 
-  controls.update();
-  if(window.SCENE.anaglyph) effect.render(scene,camera);
-  else renderer.render(scene,camera);
+    const sel = document.getElementById('modelSel');
+    const resetBtn = document.getElementById('resetBtn');
+    sel.addEventListener('change', () => loadModel(sel.value));
+    resetBtn.addEventListener('click', () => { if (current) fitToObject(current); });
 
-  stats.end();
-  requestAnimationFrame(tick);
-}
-tick();
+    loadModel('Shoe.glb');
 
-addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
-  effect.setSize(innerWidth,innerHeight);
-});
-</script>
+    function tick(){ controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick); }
+    tick();
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
 </body>
 </html>
