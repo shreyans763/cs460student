@@ -212,3 +212,5 @@ __marimo__/
 
 # ignore editor backups
 *.bak
+.bak
+.DS_Store
