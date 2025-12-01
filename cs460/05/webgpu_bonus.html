@@ -1,39 +1,55 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>CS460 A5 — WebGPU Bonus (Babylon PBR)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <style>html,body,canvas{height:100%;margin:0;background:#0c1740;display:block}</style>
+  <meta charset="utf-8"/>
+  <title>CS460 A5 — WebGPU/WebGL (Babylon)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    html,body{height:100%;margin:0;background:#0b1636}
+    #renderCanvas{width:100%;height:100%;display:block;touch-action:none}
+    #hint{position:fixed;left:8px;top:8px;color:#cbd5e1;font:12px system-ui,-apple-system}
+  </style>
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
-  <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
 <body>
-  <canvas id="c"></canvas>
-  <script type="module">
-    const canvas = document.getElementById('c');
-    const engine = new BABYLON.WebGPUEngine(canvas,{antialiasing:true});
-    await engine.initAsync();
-    const scene = new BABYLON.Scene(engine);
-    await BABYLON.SceneLoader.AppendAsync('', 'poly.glb', scene);
-    const env = await BABYLON.CubeTexture.CreateFromPrefilteredDataAsync("https://playground.babylonjs.com/textures/environment.dds", scene);
-    scene.environmentTexture = env;
-    scene.createDefaultCameraOrLight(true,true,true);
-    scene.activeCamera.attachControl(canvas,true);
+  <div id="hint">orbit with mouse/touch · loads <code>Shoe.glb</code> from /05</div>
+  <canvas id="renderCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('renderCanvas');
+    const engine = new BABYLON.Engine(canvas, true);
 
-    // apply shiny PBR to all meshes
-    scene.meshes.forEach(m=>{
-      if(m.material){
-        const pbr = new BABYLON.PBRMetallicRoughnessMaterial("pbr", scene);
-        pbr.baseColor = new BABYLON.Color3(0.95,0.95,1.0);
-        pbr.metallic = 0.3;
-        pbr.roughness = 0.25;
-        m.material = pbr;
+    const createScene = async () => {
+      const scene = new BABYLON.Scene(engine);
+      scene.clearColor = new BABYLON.Color4(0.043,0.086,0.212,1);
+
+      const camera = new BABYLON.ArcRotateCamera("cam", Math.PI/4, Math.PI/3, 1.5, new BABYLON.Vector3(0,0,0), scene);
+      camera.attachControl(canvas, true);
+
+      new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene);
+
+      const ground = BABYLON.MeshBuilder.CreateGround("g",{width:3, height:3}, scene);
+      ground.receiveShadows = true;
+
+      await BABYLON.SceneLoader.AppendAsync("./", "Shoe.glb", scene);
+      const meshes = scene.meshes.filter(m=>m.name!=="g");
+      if (meshes.length){
+        const bb = BABYLON.Mesh.CreateBox("bb", 1, scene);
+        bb.isVisible = false;
+        BABYLON.Mesh.MergeMeshes(meshes, true, true, undefined, false, true);
+        const extents = scene.getWorldExtends();
+        const size = extents.max.subtract(extents.min).length();
+        camera.radius = size * 0.9;
+        camera.setTarget(extents.min.add(extents.max).scale(0.5));
       }
+      return scene;
+    };
+
+    createScene().then(scene=>{
+      engine.runRenderLoop(()=> scene.render());
     });
 
-    engine.runRenderLoop(()=>scene.render());
-    addEventListener('resize', ()=>engine.resize());
+    window.addEventListener('resize', ()=> engine.resize());
   </script>
 </body>
 </html>
