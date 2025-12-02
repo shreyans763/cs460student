@@ -6,24 +6,24 @@
   <title>CS460 A5 — Three.js Viewer</title>
   <style>
     html,body{margin:0;height:100%;background:#0b1633;color:#cfd6e6;font:14px/1.4 system-ui,Segoe UI,Arial}
-    #hud{position:fixed;inset:0 0 auto 0;padding:8px 10px;pointer-events:none;opacity:.85}
+    #hud{position:fixed;left:10px;top:8px;opacity:.85}
     #ui{position:fixed;left:10px;bottom:10px;display:flex;gap:8px;align-items:center}
     select,button{background:#121b34;color:#cfd6e6;border:1px solid #2a3558;border-radius:8px;padding:6px 10px}
     #err{position:fixed;right:10px;bottom:10px;max-width:40ch;background:#2a1320;border:1px solid #ff6480;color:#ffd3db;border-radius:8px;padding:10px;display:none;white-space:pre-wrap}
     canvas{display:block}
   </style>
-  <!-- Import map that points "three" to your local module -->
+  <!-- Import map to official Three.js modules -->
   <script type="importmap">
   {
     "imports": {
-      "three": "./three.module.js"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
     }
   }
   </script>
 </head>
 <body>
   <div id="hud">drag to orbit · ⌘/Ctrl+wheel to zoom</div>
-
   <div id="ui">
     <label style="opacity:.85">Model:&nbsp;</label>
     <select id="model">
@@ -32,90 +32,74 @@
     </select>
     <button id="reset">Reset View</button>
   </div>
-
   <div id="err"></div>
 
   <script type="module">
     import * as THREE from 'three';
-    import { OrbitControls } from './OrbitControls.js';
-    import { GLTFLoader } from './GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-    // ---------- renderer / scene / camera ----------
-    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+    // renderer
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
     document.body.appendChild(renderer.domElement);
 
+    // scene & camera
     const scene = new THREE.Scene();
-
     const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 1000);
-    camera.position.set(0.6, 0.4, 0.9);
-
+    camera.position.set(0.6,0.4,0.9);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // lighting
+    // lights
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const key = new THREE.DirectionalLight(0xffffff, 1.1);
-    key.position.set(2, 3, 2);
+    key.position.set(2,3,2);
     scene.add(key);
 
-    // ---------- helpers ----------
-    const errBox = document.getElementById('err');
-    function showError(msg){
-      errBox.style.display='block';
-      errBox.textContent = String(msg);
-      console.error(msg);
-    }
-    function clearError(){ errBox.style.display='none'; errBox.textContent=''; }
+    // error overlay
+    const err = document.getElementById('err');
+    const showError = m => { err.style.display='block'; err.textContent=m; console.error(m); };
+    const clearError = () => { err.style.display='none'; err.textContent=''; };
 
-    // fit camera to object bounds
-    function frameObject(obj, padding=1.15){
+    // fit camera to object
+    function frameObject(obj, pad=1.2){
       const box = new THREE.Box3().setFromObject(obj);
-      if (!box.isEmpty()) {
-        const size = box.getSize(new THREE.Vector3()).length();
-        const center = box.getCenter(new THREE.Vector3());
-        const dist = (size / (2*Math.tan(THREE.MathUtils.degToRad(camera.fov*0.5))))*padding;
-        const dir = new THREE.Vector3(1,0.6,1).normalize(); // view direction
-        camera.position.copy(center.clone().add(dir.multiplyScalar(dist)));
-        camera.near = dist/100;
-        camera.far  = dist*100;
-        camera.updateProjectionMatrix();
-        controls.target.copy(center);
-        controls.update();
-      }
+      if (box.isEmpty()) return;
+      const size = box.getSize(new THREE.Vector3()).length();
+      const center = box.getCenter(new THREE.Vector3());
+      const dist = (size / (2*Math.tan(THREE.MathUtils.degToRad(camera.fov*0.5)))) * pad;
+      camera.position.copy(center.clone().add(new THREE.Vector3(1,0.6,1).normalize().multiplyScalar(dist)));
+      camera.near = dist/100; camera.far = dist*100; camera.updateProjectionMatrix();
+      controls.target.copy(center); controls.update();
     }
 
-    // ---------- loader ----------
     const loader = new GLTFLoader();
     let current;
 
     async function loadModel(url){
       clearError();
-
-      // remove previous model
-      if (current){ scene.remove(current); current.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ if(Array.isArray(o.material)){ o.material.forEach(m=>m.dispose()); } else o.material.dispose(); }}); current = null; }
-
-      // load
+      if (current){ scene.remove(current); current.traverse(o=>{ o.geometry?.dispose?.(); if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); }}); current=null; }
       try{
         const gltf = await loader.loadAsync(url);
         current = gltf.scene || gltf.scenes?.[0];
-        if (!current) throw new Error('GLB loaded but contained no scene.');
+        if(!current) throw new Error('GLB contained no scene.');
         scene.add(current);
         frameObject(current, 1.25);
       }catch(e){
-        showError(`Failed to load “${url}”.\n\nTip: paths are case-sensitive on GitHub Pages.\n${e?.message||e}`);
+        showError(`Failed to load “${url}”.\n\n(Names are case-sensitive on GitHub Pages.)\n${e?.message||e}`);
       }
     }
 
-    // UI
     const sel = document.getElementById('model');
     sel.addEventListener('change', ()=>loadModel(sel.value));
-    document.getElementById('reset').addEventListener('click', ()=>{ if (current) frameObject(current, 1.2); });
+    document.getElementById('reset').addEventListener('click', ()=> current && frameObject(current,1.2));
 
-    // start
-    loadModel(sel.value);  // "Shoe.glb" by default
+    // initial load
+    loadModel(sel.value);
 
     // resize
     addEventListener('resize', ()=>{
@@ -124,8 +108,8 @@
       renderer.setSize(innerWidth, innerHeight);
     });
 
-    // render loop
-    renderer.setAnimationLoop(()=>{ controls.update(); renderer.render(scene, camera); });
+    // render
+    renderer.setAnimationLoop(()=>{ controls.update(); renderer.render(scene,camera); });
   </script>
 </body>
 </html>
