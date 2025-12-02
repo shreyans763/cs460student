@@ -52,3 +52,36 @@ createScene().then(scene=> engine.runRenderLoop(()=> scene.render()));
 addEventListener('resize', ()=> engine.resize());
 </script>
 </body></html>
+<script>
+(function () {
+  // Try every 250ms until the scene + model exist, then scale once.
+  const tick = setInterval(() => {
+    const s = window.scene || window.sc || window._scene;
+    if (!s || !s.meshes) return;
+
+    // Try common names for the imported GLB root
+    const root =
+      s.getNodeByName("__root__") ||
+      s.meshes.find(m => /shoe/i.test(m.name));
+
+    if (!root || root.__scaled) return;
+
+    // 🔴 Set your size here (higher = bigger)
+    const SCALE = 6.0;
+
+    root.scaling.setAll(SCALE);
+    root.position.y = 0;
+    root.__scaled = true;
+
+    // Nudge camera closer if it's an arc-rotate
+    const cam = s.activeCamera;
+    if (cam && cam.radius) {
+      cam.radius = Math.max(1, cam.radius * 0.6);
+      cam.lowerRadiusLimit = 0.3;
+    }
+
+    console.log("Scaled model x" + SCALE);
+    clearInterval(tick);
+  }, 250);
+})();
+</script>
