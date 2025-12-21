@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CS460 – A2: 3D Art with XTK</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html, body { margin:0; height:100%; background:#000; color:#fff; font:16px system-ui, Arial; }
+    header { text-align:center; padding:12px 0; }
+    #r { width:100vw; height:72vh; display:block; }
+    .help { max-width:900px; margin:8px auto; padding:0 12px; line-height:1.4 }
+    kbd { padding:2px 6px; border:1px solid #888; border-bottom-width:2px; border-radius:4px; background:#111; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Assignment 2 – XTK Cube Art</h1>
+    <div class="help">
+      Hover a cube to select it. Keys:
+      <kbd>Q</kbd> hide,&nbsp;
+      <kbd>W</kbd> color,&nbsp;
+      <kbd>E</kbd> rotateX 10°,&nbsp;
+      <kbd>B</kbd> toggle camera spin,&nbsp;
+      <kbd>O</kbd> download scene,&nbsp;
+      <kbd>L</kbd> load <code>scene.json</code>.
+    </div>
+  </header>
+
+  <!-- Render target -->
+  <div id="r"></div>
+
+  <!-- XTK + loader (provided by course) -->
+  <script src="xtk.js"></script>
+  <script src="loader.js"></script>
+
+  <script>
+    // =========================================================================
+    // Globals used across parts
+    // =========================================================================
+    /** @type {X.renderer3D} */ var r;
+    /** @type {X.cube|null}   */ var SELECTED_CUBE = null;
+    /** camera spin toggle (Part 6) */ var SPIN = false;
+
+    // Proper size & spacing so 1331 cubes do not overlap (Part 2)
+    const SIZE = 12;  // cube edge length
+    const GAP  = 4;   // empty space between cubes
+    const STEP = SIZE + GAP;
+
+    window.onload = function () {
+
+      // -----------------------------------------------------------------------
+      // Part 1: Getting ready for XTK
+      // - create renderer, attach to #r, and init
+      // -----------------------------------------------------------------------
+      r = new X.renderer3D();
+      r.container = 'r';
+      r.init();
+
+      // -----------------------------------------------------------------------
+      // Part 2: Create many cubes (11 x 11 x 11 = 1331)
+      // - translate by STEP in each axis so cubes don't overlap
+      // - give a soft RGB gradient so depth is visible
+      // -----------------------------------------------------------------------
+      for (var z = -5; z <= 5; z++) {
+        for (var y = -5; y <= 5; y++) {
+          for (var x = -5; x <= 5; x++) {
+            var c = new X.cube();
+            c.lengthX = SIZE;
+            c.lengthY = SIZE;
+            c.lengthZ = SIZE;
+
+            c.transform.translateX(STEP * x);
+            c.transform.translateY(STEP * y);
+            c.transform.translateZ(STEP * z);
+
+            // gradient color (nice for screenshots)
+            c.color = [ (x + 5) / 10, (y + 5) / 10, (z + 5) / 10 ];
+
+            r.add(c);
+          }
+        }
+      }
+      // (FYI: 11*11*11 = 1331 cubes.)
+
+      // -----------------------------------------------------------------------
+      // Part 3: Move the camera to (0, 0, 300)
+      // -----------------------------------------------------------------------
+      r.camera.position = [0, 0, 300];
+
+      // -----------------------------------------------------------------------
+      // Part 6: Spin the camera (toggled with B)
+      // - rotate 1 degree around X each frame when SPIN is true
+      // -----------------------------------------------------------------------
+      r.onRender = function () {
+        if (SPIN) r.camera.rotate([1, 0]);
+      };
+
+      // -----------------------------------------------------------------------
+      // Part 4: Select a cube with the mouse (hover picking)
+      // - store the current cube in SELECTED_CUBE
+      // -----------------------------------------------------------------------
+      r.interactor.onMouseMove = function (e) {
+        var id = r.pick(e.offsetX, e.offsetY);  // 0 means "nothing"
+        SELECTED_CUBE = (id !== 0) ? r.get(id) : null;
+      };
+
+      // -----------------------------------------------------------------------
+      // Part 5: Keyboard controls
+      //  Q: hide selected cube
+      //  W: random color for selected cube
+      //  E: rotate selected cube by 10 degrees around X
+      //  B: toggle camera spin
+      //  O: download scene.json via loader.js
+      //  L: load scene.json via loader.js
+      //     (cache-busted so the newest pushed file is fetched)
+      // -----------------------------------------------------------------------
+      window.onkeypress = function (e) {
+        const k = e.key.toLowerCase();
+
+        // Works without selection
+        if (k === 'b') { SPIN = !SPIN; return; }
+        if (k === 'o' && typeof download === 'function') { download(); return; }
+        if (k === 'l' && typeof upload   === 'function') {
+          upload('scene.json?ts=' + Date.now()); // cache-bust so L always loads the newest
+          return;
+        }
+
+        // From here on, we need a hovered cube
+        if (!SELECTED_CUBE) return;
+
+        if (k === 'q') {
+          SELECTED_CUBE.visible = false;
+        } else if (k === 'w') {
+          SELECTED_CUBE.color = [Math.random(), Math.random(), Math.random()];
+        } else if (k === 'e') {
+          SELECTED_CUBE.transform.rotateX(10);
+        }
+      };
+
+      // Kick off rendering (Part 1 end)
+      r.render();
+    };
+  </script>
+</body>
+</html>

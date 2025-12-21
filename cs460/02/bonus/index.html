@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>A2 Bonus – Spheres + Camera Cycle</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html,body{margin:0;height:100%;background:#000;color:#fff;font:16px system-ui,Arial}
+    header{ text-align:center; padding:14px 0 }
+    #r{ width:100vw; height:74vh; display:block }
+    .help{ max-width:960px; margin:6px auto 0; padding:0 12px; line-height:1.45 }
+    kbd{ padding:2px 6px; border:1px solid #888; border-bottom-width:2px; border-radius:4px; background:#111 }
+    .hud{ position:fixed; left:10px; bottom:10px; background:#111b; border:1px solid #333; border-radius:8px; padding:8px 10px; font-size:13px }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>A2 Bonus – Spheres + Camera Cycle</h1>
+    <div class="help">
+      Keys: <kbd>C</kbd> save camera,&nbsp; <kbd>V</kbd> play/stop camera tour,&nbsp;
+      <kbd>O</kbd> download scene,&nbsp; <kbd>L</kbd> load <code>scene.json</code> (from this folder).
+    </div>
+  </header>
+
+  <div id="r"></div>
+  <div class="hud" id="hud">cams: 0 • tour: off</div>
+
+  <!-- use shared libs from parent folder -->
+  <script src="../xtk.js"></script>
+  <script src="../loader.js"></script>
+  <script>
+    // =========================================================================
+    // Globals
+    // =========================================================================
+    /** @type {X.renderer3D} */ var r;
+    /** Saved camera views */   var CAMERAS = [];
+    /** Tour state */           var TOUR_ON = false;
+    var tourTimer = null;
+    var hud = null;
+
+    // Non-overlapping lattice parameters
+    const CELL  = 26;   // grid spacing between sphere centers
+    const RMIN  = 6;    // min radius
+    const RMAX  = 10;   // max radius (2*RMAX = 20 < CELL = 26 => gap >= 6)
+    const COUNT = 7;    // COUNT^3 spheres => 343 (good performance)
+
+    function rand(a,b){ return a + Math.random()*(b-a); }
+    function updateHUD(){
+      hud.textContent = `cams: ${CAMERAS.length} • tour: ${TOUR_ON ? 'on' : 'off'}`;
+    }
+
+    window.onload = function () {
+      hud = document.getElementById('hud');
+
+      // -----------------------------------------------------------------------
+      // Renderer
+      // -----------------------------------------------------------------------
+      r = new X.renderer3D();
+      r.container = 'r';
+      r.init();
+
+      // -----------------------------------------------------------------------
+      // Build a 7×7×7 lattice of spheres (random radius & color, no overlaps)
+      // -----------------------------------------------------------------------
+      const half = (COUNT - 1) / 2; // centers range: -half..+half
+      for (let z = -half; z <= half; z++) {
+        for (let y = -half; y <= half; y++) {
+          for (let x = -half; x <= half; x++) {
+            const s = new X.sphere();
+            s.radius = rand(RMIN, RMAX);                    // size first
+            s.color  = [Math.random(), Math.random(), Math.random()];
+            s.transform.translateX(x * CELL);
+            s.transform.translateY(y * CELL);
+            s.transform.translateZ(z * CELL);
+            r.add(s);
+          }
+        }
+      }
+
+      // Camera back far enough to see the full block
+      r.camera.position = [0, 0, 420];
+
+      // -----------------------------------------------------------------------
+      // Keyboard controls: C, V, O, L
+      // -----------------------------------------------------------------------
+      window.onkeypress = function(e){
+        const k = e.key.toLowerCase();
+
+        if (k === 'c') {
+          // Save current camera
+          CAMERAS.push(new Float32Array(r.camera.view));
+          updateHUD();
+          return;
+        }
+
+        if (k === 'v') {
+          if (!TOUR_ON) {
+            if (CAMERAS.length < 2) {
+              alert('Save at least two camera views with C before starting the tour.');
+              return;
+            }
+            TOUR_ON = true;
+            let idx = 0;
+            tourTimer = setInterval(function(){
+              r.camera.view = CAMERAS[idx % CAMERAS.length];
+              idx++;
+            }, 1000); // 1 second per view
+          } else {
+            TOUR_ON = false;
+            clearInterval(tourTimer);
+          }
+          updateHUD();
+          return;
+        }
+
+        if (k === 'o' && typeof download === 'function') {
+          // Save the current spheres scene to a file
+          download();
+          return;
+        }
+
+        if (k === 'l' && typeof upload === 'function') {
+          // Load local scene.json from THIS folder.
+          // Cache-bust to avoid a stale cached file.
+          upload('scene.json?ts=' + Date.now());
+          return;
+        }
+      };
+
+      updateHUD();
+      r.render();
+    };
+  </script>
+</body>
+</html>

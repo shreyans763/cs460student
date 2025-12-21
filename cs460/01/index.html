@@ -1,0 +1,106 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>CS460.org Assignment 1</title>
+    <style>
+      body {
+        background: black;
+        color: white;
+        font-family: sans-serif;
+        text-align: center;
+        font-size: 20pt;
+      }
+
+      .demo {
+        margin: auto;
+        width:50%;
+      }
+
+      #screenshot {
+        float:left;
+        margin-right: 20px;
+        margin-bottom: 20px;
+        max-width: 300px;
+        border: thin solid white;
+      }
+
+      #description {
+        text-align: justify;
+      }
+      #technology {
+        text-align: justify;
+      }
+      #comparison {
+        text-align: justify;
+      }
+      #ai {
+        text-align: justify;
+      }
+
+      #bonus {
+        width: 100%;
+      }
+
+    </style>
+  </head>
+  <body>
+
+    <img id='cube' src='https://cs460.org/gfx/cube.png'>
+
+    <h1>RO.ME "3 DREAMS OF BLACK"</h1>
+
+    <div class='demo'>
+
+      <img id="screenshot" src="gfx/rome-screenshot.png" alt="RO.ME desert scene">
+
+      <p id="description">
+        <em>RO.ME: 3 Dreams of Black</em> (2011) is a pioneering interactive music film that ran
+        natively in the browser using early WebGL and Three.js. It blended real-time 3D scenes,
+        animation, and synchronized audio into a navigable story—no plugins required. The project
+        proved that cinematic, interactive graphics could live on the open web and helped kick-start
+        a wave of Three.js/WebGL experiments. Its influence is visible in today immersive web
+        experiences for art, data storytelling, and branded interactives.
+      </p>
+      <p id="technology">
+        <strong>Technologies used:</strong><br>
+          WebGL (hardware-accelerated graphics in the browser)<br>
+          Three.js (high-level 3D framework on top of WebGL)<br>
+          HTML5 / CSS3 / JavaScript (structure, layout, interaction)<br>
+          GLSL shaders (materials, lighting, post-effects)<br>
+          Web Audio + timing synchronization for interactive sequences
+      </p>
+      <p id="comparison">
+        <a href="https://blobmixer.14islands.com" target="_blank" rel="noopener">Blob Mixer (14islands)</a>
+        showcases modern WebGL/Three.js craft—smooth micro-interactions, signed-distance “blob”
+        modeling, and polished post-processing. Compared with RO.ME long-form, music-driven
+        narrative from 2011, Blob Mixer reflects today playful, tool-like experiences and physically
+        based rendering polish. Both demonstrate the power of real-time 3D on the open web—just from
+        different eras and goals.
+      </p>
+      <p id="ai">
+        <strong>Answer (via ChatGPT, GPT-5 Thinking):</strong>
+        RO.ME mattered because it proved cinematic, user-steered 3D could run directly in the browser
+        with WebGL and Three.js—no plugins. That success accelerated the adoption of real-time 3D for
+        interactive art and web experiences over the next decade.
+      </p>
+
+      <div id="bonus">
+        <h3>Bonus: Animated models</h3>
+        <div style="display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
+          <iframe src="rome-gltf/viewer1.html?files/models/life_soup/quadruped_fox.gltf"
+                  width="100%" height="320" loading="lazy" title="Model 1"></iframe>
+          <iframe src="rome-gltf/viewer2.html?files/models/life_soup/birdsA_parrot.gltf"
+                  width="100%" height="320" loading="lazy" title="Model 2"></iframe>
+          <iframe src="rome-gltf/viewer3.html?files/models/black_soup/alligator.gltf"
+                  width="100%" height="320" loading="lazy" title="Model 3"></iframe>
+        </div>
+        <p style="font-size:0.9em">
+          Credit: <a href="https://github.com/mrdoob/rome-gltf" target="_blank" rel="noopener">mrdoob/rome-gltf</a>
+        </p>
+      </div>
+      
+
+    </div>
+
+  </body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CS460 A5 — WebGPU/WebGL (Debug)</title>
+<style>
+  html,body{height:100%;margin:0;background:#0b1636}
+  #renderCanvas{width:100%;height:100%;display:block}
+  #err{position:fixed;right:10px;top:10px;background:#7f1d1d;color:#fff;padding:10px 12px;border-radius:8px;max-width:42ch;display:none;white-space:pre-wrap}
+</style>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+</head><body>
+<div id="err"></div>
+<canvas id="renderCanvas"></canvas>
+<script>
+const errBox = document.getElementById('err');
+const showErr = m => { errBox.textContent = m; errBox.style.display='block'; console.error(m); };
+
+const canvas = document.getElementById('renderCanvas');
+const engine = new BABYLON.Engine(canvas, true);
+
+async function createScene(){
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.043,0.086,0.212,1);
+  const camera = new BABYLON.ArcRotateCamera("cam", Math.PI/4, Math.PI/3, 1.5, BABYLON.Vector3.Zero(), scene);
+  camera.attachControl(canvas, true);
+  new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene);
+  const ground = BABYLON.MeshBuilder.CreateGround("g",{width:3,height:3},scene); ground.receiveShadows=true;
+
+  async function tryLoad(name){
+    try{
+      await BABYLON.SceneLoader.AppendAsync("./", name, scene);
+      return true;
+    }catch(e){ console.error("Load error", name, e); return false; }
+  }
+
+  let ok = await tryLoad("Shoe.glb");
+  if(!ok) ok = await tryLoad("poly.glb");
+  if(!ok){
+    showErr('Could not load Shoe.glb or poly.glb from /05.\nCheck filenames/case and that they are committed.');
+    const cube = BABYLON.MeshBuilder.CreateBox("fallback",{size:0.3},scene);
+    camera.target = cube; camera.radius = 1.2;
+    return scene;
+  }
+
+  // frame
+  const ext = scene.getWorldExtends();
+  camera.target = ext.min.add(ext.max).scale(0.5);
+  camera.radius = ext.max.subtract(ext.min).length()*0.9;
+  return scene;
+}
+createScene().then(scene=> engine.runRenderLoop(()=> scene.render()));
+addEventListener('resize', ()=> engine.resize());
+</script>
+</body></html>
+<script>
+(function () {
+  // Try every 250ms until the scene + model exist, then scale once.
+  const tick = setInterval(() => {
+    const s = window.scene || window.sc || window._scene;
+    if (!s || !s.meshes) return;
+
+    // Try common names for the imported GLB root
+    const root =
+      s.getNodeByName("__root__") ||
+      s.meshes.find(m => /shoe/i.test(m.name));
+
+    if (!root || root.__scaled) return;
+
+    // 🔴 Set your size here (higher = bigger)
+    const SCALE = 6.0;
+
+    root.scaling.setAll(SCALE);
+    root.position.y = 0;
+    root.__scaled = true;
+
+    // Nudge camera closer if it's an arc-rotate
+    const cam = s.activeCamera;
+    if (cam && cam.radius) {
+      cam.radius = Math.max(1, cam.radius * 0.6);
+      cam.lowerRadiusLimit = 0.3;
+    }
+
+    console.log("Scaled model x" + SCALE);
+    clearInterval(tick);
+  }, 250);
+})();
+</script>
